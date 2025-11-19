@@ -1,4 +1,4 @@
-# 🌍 A.R.T (Agentic RAG Traveler)
+# 🌍 AgenticTravelRAG (A.R.T - Agentic RAG Traveler)
 
 > **TripAdvisor 리뷰 데이터를 기반으로, 사용자가 자연어로 여행 요구사항을 질문하면 관련 호텔·액티비티를 찾아주고 맞춤형 여행 일정을 제안하는 Agentic RAG 기반 지능형 여행 플래너**
 
@@ -80,8 +80,8 @@ graph TD
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/your-team/ART-project.git
-cd ART-project
+git clone git@github.com:b8goal/AgenticTravelRAG.git
+cd AgenticTravelRAG
 
 # 2. 환경 설정
 make setup
@@ -98,7 +98,7 @@ make test
 ## 📁 프로젝트 구조
 
 ```
-ART-project/
+AgenticTravelRAG/
 ├── src/                      # 소스 코드
 │   ├── agents/              # LangGraph 에이전트
 │   ├── tools/               # 외부 API 도구
