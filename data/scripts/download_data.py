@@ -12,6 +12,7 @@ from pathlib import Path
 from datasets import load_dataset
 from loguru import logger
 from dotenv import load_dotenv
+from pandas import Timestamp 
 
 # 환경 변수 및 설정 로드
 load_dotenv()
@@ -26,6 +27,11 @@ DATA_CONFIG = config.get('data', {})
 DATASET_NAME = DATA_CONFIG.get('huggingface_dataset')
 RAW_DIR = Path(DATA_CONFIG.get('raw_dir'))
 MAX_DOCS = DATA_CONFIG.get('max_docs_for_dev')
+
+def _jsonable(value):
+    if isinstance(value, Timestamp):
+        return value.isoformat()
+    return value
 
 def download_data():
     """데이터셋을 다운로드하고 JSONL 형식으로 raw 디렉토리에 저장"""
@@ -51,9 +57,10 @@ def download_data():
             dataset = dataset.select(range(MAX_DOCS))
 
         # JSONL 형식으로 저장
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             for item in dataset:
-                f.write(json.dumps(item, ensure_ascii=False) + '\n')
+                clean_item = {k: _jsonable(v) for k, v in item.items()}
+                f.write(json.dumps(clean_item, ensure_ascii=False) + "\n")
 
         logger.success(f"데이터 다운로드 및 저장 완료: {output_file} ({len(dataset)}개 문서)")
 

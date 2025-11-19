@@ -7,20 +7,20 @@ pyyaml==6.0.1
 typing-extensions==4.8.0
 
 # LangChain & LangGraph
-langchain==0.1.0
-langchain-openai==0.0.5
-langchain-community==0.0.10
-langgraph==0.2.0
+langchain==0.2.0
+langchain-openai==0.1.14
+langchain-community==0.2.0
+langgraph==0.1.17
 
 # LLM
-openai==1.12.0
+openai==1.32.0
 
 # ElasticSearch & Embeddings
 elasticsearch==8.11.0
 sentence-transformers==2.2.2
 
 # Data Processing
-datasets==2.14.0
+datasets>=2.18.0,<3.0.0
 pandas==2.0.3
 numpy==1.24.3
 huggingface-hub==0.19.4

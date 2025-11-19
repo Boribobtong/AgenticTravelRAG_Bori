@@ -1,55 +1,50 @@
-## 📋 Description
-<!-- 변경사항에 대한 간단한 설명을 작성해주세요 -->
+# 📝 PR Template (Simple & Beginner-friendly)
 
-## 🔗 Related Issue
-<!-- 관련 이슈 번호를 작성해주세요 -->
+## 1. 무엇을 변경했나요?
+
+<!-- 이번 PR에서 어떤 작업을 했는지 간단히 적어주세요 -->
+
+---
+
+## 2. 관련 이슈 (있다면)
+
 Closes #
 
-## 📌 Type of Change
-<!-- 해당하는 항목에 체크해주세요 -->
-- [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
-- [ ] ✨ New feature (non-breaking change which adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- [ ] 📝 Documentation update
-- [ ] ♻️ Refactoring
-- [ ] 🧪 Test update
+---
 
-## ✅ Checklist
-<!-- 모든 항목을 확인하고 체크해주세요 -->
-- [ ] 코드가 프로젝트 스타일 가이드를 따름
-- [ ] 셀프 리뷰 완료
-- [ ] 코드에 필요한 주석 추가
-- [ ] 문서 업데이트 (필요한 경우)
-- [ ] 변경사항이 기존 테스트를 깨뜨리지 않음
-- [ ] 새로운 테스트 추가 (필요한 경우)
-- [ ] 모든 테스트 통과 (`pytest tests/`)
-- [ ] 커밋 메시지가 컨벤션을 따름
+## 3. 변경 유형
 
-## 🧪 Testing
-<!-- 어떻게 테스트했는지 설명해주세요 -->
-- [ ] 로컬에서 테스트 완료
-- [ ] ElasticSearch 연동 테스트
-- [ ] API 엔드포인트 테스트 (해당하는 경우)
-- [ ] UI 테스트 (해당하는 경우)
+* [ ] 버그 수정
+* [ ] 기능 추가
+* [ ] 코드 정리(리팩토링)
+* [ ] 문서 수정
 
-## 📸 Screenshots (if applicable)
-<!-- UI 변경사항이 있는 경우 스크린샷을 첨부해주세요 -->
+---
 
-## 📊 Performance Impact
-<!-- 성능에 영향을 주는 변경사항이 있다면 설명해주세요 -->
-- [ ] 이 PR이 성능에 영향을 줍니다
-  - 영향 설명:
+## 4. 체크리스트
 
-## 🔒 Security Considerations
-<!-- 보안 관련 고려사항이 있다면 작성해주세요 -->
-- [ ] API 키 또는 민감한 정보 처리 변경
-- [ ] 사용자 입력 검증 추가/변경
-- [ ] 기타 보안 관련 사항:
+* [ ] 직접 돌려보고 문제 없는지 확인함
+* [ ] 필요한 경우 주석을 추가함
+* [ ] 테스트(또는 기본 기능)가 정상 동작함
+* [ ] 커밋 메시지를 알아보기 쉽게 작성함
 
-## 💬 Additional Notes
-<!-- 리뷰어에게 전달하고 싶은 추가 정보가 있다면 작성해주세요 -->
+---
 
-## 📋 Reviewer Notes
-<!-- 리뷰어가 특별히 주의깊게 봐야 할 부분을 명시해주세요 -->
-- 
-- 
+## 5. 어떻게 테스트했나요?
+
+<!-- 실행해본 방법, 확인한 부분 등을 간단히 적어주세요 -->
+
+---
+
+## 6. 스크린샷 (UI 변경 시)
+
+<!-- 이미지가 있으면 첨부해주세요 -->
+
+---
+
+## 7. 추가 참고 내용
+
+<!-- 리뷰어가 알면 좋은 내용이 있으면 적어주세요 -->
+
+---
+
