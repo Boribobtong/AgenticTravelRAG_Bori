@@ -1,8 +1,5 @@
 # 🚀 AgenticTravelRAG - 실제 사용 명령어
 
-## 📁 파일 다운로드 위치
-생성된 파일들이 `/mnt/user-data/outputs/AgenticTravelRAG/` 에 있습니다.
-
 ## 🔧 로컬에서 프로젝트 시작하기
 
 ### 방법 1: 파일 다운로드 후 시작
@@ -45,7 +42,7 @@ git add .
 git commit -m "feat: Initial project structure with core agents"
 
 # 4. GitHub 연결
-git remote add origin https://github.com/YOUR_TEAM/AgenticTravelRAG.git
+git remote add origin https://github.com/b8goal/AgenticTravelRAG.git
 git push -u origin main
 ```
 
@@ -54,7 +51,7 @@ git push -u origin main
 # 1. GitHub에서 새 레포지토리 생성 (AgenticTravelRAG)
 
 # 2. 로컬에 클론
-git clone https://github.com/YOUR_TEAM/AgenticTravelRAG.git
+git clone https://github.com/b8goal/AgenticTravelRAG.git
 cd AgenticTravelRAG
 
 # 3. 파일 복사
