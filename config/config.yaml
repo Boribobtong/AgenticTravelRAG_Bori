@@ -1,0 +1,32 @@
+# =======================================================
+# AgenticTravelRAG 메인 설정 파일
+# =======================================================
+
+app:
+  name: AgenticTravelRAG
+  version: 1.0.0
+  description: TripAdvisor 리뷰 기반 지능형 여행 플래너
+
+llm:
+  model_name: gpt-3.5-turbo
+  temperature: 0.1         # 파싱은 낮게, 생성은 높게 설정 가능
+  max_tokens: 2000
+
+elasticsearch:
+  host: ${ES_HOST:elasticsearch}
+  port: ${ES_PORT:9200}
+  user: ${ES_USER:elastic}
+  password: ${ES_PASSWORD:changeme}
+  index_name: art_hotel_reviews
+  embedding_model: sentence-transformers/all-MiniLM-L6-v2
+
+data:
+  huggingface_dataset: jniimi/tripadvisor-review-rating   # elasticsearch_rag.py 에서 사용
+  max_docs_for_dev: 5000                                  # 개발 환경에서 샘플 문서 수
+  raw_dir: data/raw
+  processed_dir: data/processed
+  embeddings_dir: data/embeddings
+
+logging:
+  level: INFO
+  format: "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"

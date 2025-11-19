@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # 1. ElasticSearch Service (Vector DB and Search Engine)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.14.3
+    container_name: es_rag
+    environment:
+      - xpack.security.enabled=true
+      - ELASTIC_PASSWORD=${ES_PASSWORD}
+      - ELASTIC_USERNAME=${ES_USER}
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - discovery.type=single-node
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -s --fail -u elastic:${ELASTIC_PASSWORD} http://localhost:9200/_cat/health?h=st || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+
+  # 2. Application Service (FastAPI)
+  app:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    container_name: art_fastapi
+    restart: always
+    environment:
+      # 환경 변수는 .env 파일에서 직접 로드되도록 설정
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SERP_API_KEY=${SERP_API_KEY}
+      - ES_HOST=elasticsearch # 도커 네트워크 내부 호스트명
+      - ES_PORT=9200
+      - ES_USER=${ES_USER}
+      - ES_PASSWORD=${ES_PASSWORD}
+    volumes:
+      - .:/app # 소스 코드 마운트
+    ports:
+      - "8000:8000"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy # ES가 정상 작동할 때까지 대기
+    command: sh -c "python data/scripts/index_to_elastic.py && uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  es_data:
+    driver: local
