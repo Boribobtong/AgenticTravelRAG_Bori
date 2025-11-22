@@ -256,7 +256,7 @@ with col2:
         # 호텔 정보
         hotels = plan.get('hotels', [])
         if hotels:
-            st.subheader(f"�� 추천 호텔 ({len(hotels)})")
+            st.subheader(f"🏨 추천 호텔 ({len(hotels)})")
             for hotel in hotels[:3]:
                 # 필드명 호환성 처리 (price vs price_range)
                 price = hotel.get('price_range') or hotel.get('price') or '정보 없음'
