@@ -15,6 +15,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
 from loguru import logger
+from dotenv import load_dotenv
+
+# [1] 서버 시작 전 .env 로드
+env_path = Path("config/.env")
+if env_path.exists():
+    load_dotenv(env_path)
+else:
+    load_dotenv()
+
+# [2] 프록시 환경 변수 제거 (OpenAI 라이브러리 충돌 방지)
+# 이 코드가 없으면 'unexpected keyword argument proxies' 에러가 발생할 수 있습니다.
+proxy_keys = ["http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "OPENAI_PROXY"]
+for key in proxy_keys:
+    if key in os.environ:
+        del os.environ[key]
 
 # 프로젝트 루트를 Python Path에 추가
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -175,8 +190,6 @@ async def create_travel_plan(request: TravelRequest):
 async def get_session(session_id: str):
     """
     세션 정보 조회 엔드포인트
-    
-    특정 세션의 대화 히스토리와 상태를 조회합니다.
     """
     
     if session_id not in sessions:
@@ -216,16 +229,11 @@ async def submit_feedback(
     feedback: str,
     rating: Optional[int] = None
 ):
-    """
-    사용자 피드백 제출 엔드포인트
-    
-    생성된 여행 계획에 대한 피드백을 제출합니다.
-    """
+    """사용자 피드백 제출 엔드포인트"""
     
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
     
-    # 피드백 저장 (추후 데이터베이스 저장 구현)
     state = sessions[session_id]
     state['user_feedback'] = feedback
     if rating:
@@ -240,11 +248,7 @@ async def search_hotels(
     check_out: Optional[str] = None,
     min_rating: Optional[float] = 3.5
 ):
-    """
-    호텔 직접 검색 엔드포인트
-    
-    ElasticSearch RAG를 사용하여 호텔을 검색합니다.
-    """
+    """호텔 직접 검색 엔드포인트"""
     
     try:
         from src.rag.elasticsearch_rag import get_rag_instance
@@ -265,11 +269,7 @@ async def search_hotels(
 
 @app.get("/api/v1/weather/{location}", tags=["Weather"])
 async def get_weather(location: str, days: int = 5):
-    """
-    날씨 정보 조회 엔드포인트
-    
-    Open-Meteo API를 사용하여 날씨를 조회합니다.
-    """
+    """날씨 정보 조회 엔드포인트"""
     
     try:
         from src.agents.weather_tool import WeatherToolAgent
@@ -293,9 +293,8 @@ async def get_weather(location: str, days: int = 5):
 # ==================== 메인 실행 ====================
 
 if __name__ == "__main__":
-    # 환경변수 로드
-    from dotenv import load_dotenv
-    load_dotenv()
+    # 환경변수 로드 (uvicorn으로 직접 실행하지 않을 경우를 대비)
+    load_dotenv("config/.env")
     
     # 서버 실행
     uvicorn.run(
