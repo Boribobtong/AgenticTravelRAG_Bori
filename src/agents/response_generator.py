@@ -5,17 +5,16 @@ import logging
 from typing import Dict, Any, List
 from datetime import datetime
 
-# [수정] Google Gemini 임포트
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 
 logger = logging.getLogger(__name__)
 
 class ResponseGeneratorAgent:
     def __init__(self):
-        # [수정] ChatGoogleGenerativeAI 사용
+        # [수정] 모델 변경: gemini-2.5-pro (최신 고성능 모델 사용)
         self.llm = ChatGoogleGenerativeAI(
-            model="gemini-1.5-flash",
+            model="gemini-2.5-pro",
             temperature=0.7,
         )
         
