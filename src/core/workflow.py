@@ -90,43 +90,40 @@ class ARTWorkflow:
     # ==================== 노드 함수들 ====================
     
     async def parse_query_node(self, state: AppState) -> AppState:
-        """쿼리 파싱 및 컨텍스트 업데이트"""
-        logger.info(f"[QueryParser] 시작: {state['user_query'][:50]}...")
-        
-        state = self.state_manager.log_execution_path(state, "query_parser")
-        
-        try:
-            parsed_info = await self.query_parser.parse(state['user_query'])
+            """쿼리 파싱 및 컨텍스트 업데이트"""
+            logger.info(f"[QueryParser] 시작: {state['user_query'][:50]}...")
             
-            # [핵심 수정] 컨텍스트 유지 로직
-            # 새로운 정보가 없으면(None), 기존 정보를 지우지 않고 유지합니다.
-            updates = {}
-            if parsed_info.get('destination'):
-                updates['destination'] = parsed_info['destination']
+            state = self.state_manager.log_execution_path(state, "query_parser")
             
-            if parsed_info.get('dates'):
-                updates['travel_dates'] = parsed_info['dates']
+            try:
+                # [수정] state 전체를 넘겨주어 컨텍스트를 인식하게 함
+                parsed_info = await self.query_parser.parse(state['user_query'], state)
                 
-            if parsed_info.get('traveler_count'):
-                updates['traveler_count'] = parsed_info['traveler_count']
+                updates = {}
+                if parsed_info.get('destination'):
+                    updates['destination'] = parsed_info['destination']
                 
-            if parsed_info.get('preferences'):
-                # 선호도는 병합(Merge)하거나 덮어쓰기
-                current_prefs = state.get('preferences', {}) or {}
-                new_prefs = parsed_info['preferences']
-                # 간단히 덮어쓰기 (필요시 병합 로직 추가 가능)
-                if new_prefs:
-                    updates['preferences'] = new_prefs
+                if parsed_info.get('dates'):
+                    updates['travel_dates'] = parsed_info['dates']
+                    
+                # traveler_count가 None이 아닐 때만 업데이트 (기존 인원 유지)
+                if parsed_info.get('traveler_count') is not None:
+                    updates['traveler_count'] = parsed_info['traveler_count']
+                    
+                if parsed_info.get('preferences'):
+                    current_prefs = state.get('preferences', {}) or {}
+                    # 단순 덮어쓰기가 아니라 병합하는 것이 더 좋음 (여기서는 일단 유지)
+                    updates['preferences'] = parsed_info['preferences']
 
-            state = self.state_manager.update_state(state, updates)
-            logger.info(f"[QueryParser] 완료: 목적지={state.get('destination')}")
+                state = self.state_manager.update_state(state, updates)
+                logger.info(f"[QueryParser] 완료: 목적지={state.get('destination')}, 날짜={state.get('travel_dates')}")
+                
+            except Exception as e:
+                logger.error(f"[QueryParser] 실패: {str(e)}")
+                state['error_messages'].append(str(e))
+                state['conversation_state'] = ConversationState.ERROR
             
-        except Exception as e:
-            logger.error(f"[QueryParser] 실패: {str(e)}")
-            state['error_messages'].append(str(e))
-            state['conversation_state'] = ConversationState.ERROR
-        
-        return state
+            return state
     
     async def hotel_rag_node(self, state: AppState) -> AppState:
         """호텔 검색"""

@@ -31,21 +31,10 @@ class GoogleSearchAgent:
         logger.info("GoogleSearchAgent 초기화 완료")
     
     async def search_hotel_info(self, hotel_name: str, location: str) -> GoogleSearchResult:
-        """
-        호텔 정보 검색
-        
-        Args:
-            hotel_name: 호텔 이름
-            location: 위치
-            
-        Returns:
-            검색 결과
-        """
-        
+        """호텔 정보 검색"""
         query = f"{hotel_name} {location} hotel prices reviews"
         
         if not self.api_key:
-            # API 키가 없으면 모의 데이터 반환
             return self._get_mock_results(hotel_name, location)
         
         try:
@@ -73,18 +62,7 @@ class GoogleSearchAgent:
     async def search_hotel_prices(self, hotel_name: str, 
                                  check_in: str, 
                                  check_out: str) -> Dict[str, Any]:
-        """
-        호텔 가격 검색 (Google Hotels)
-        
-        Args:
-            hotel_name: 호텔 이름
-            check_in: 체크인 날짜
-            check_out: 체크아웃 날짜
-            
-        Returns:
-            가격 정보
-        """
-        
+        """호텔 가격 검색 (Google Hotels)"""
         if not self.api_key:
             return self._get_mock_price_data(hotel_name)
         
@@ -112,16 +90,7 @@ class GoogleSearchAgent:
             return self._get_mock_price_data(hotel_name)
     
     async def search_attractions(self, location: str) -> List[Dict[str, Any]]:
-        """
-        관광지 검색
-        
-        Args:
-            location: 위치
-            
-        Returns:
-            관광지 리스트
-        """
-        
+        """관광지 검색"""
         query = f"top tourist attractions {location} things to do"
         
         if not self.api_key:
@@ -149,17 +118,7 @@ class GoogleSearchAgent:
             return self._get_mock_attractions(location)
     
     def _parse_search_results(self, query: str, data: Dict) -> GoogleSearchResult:
-        """
-        검색 결과 파싱
-        
-        Args:
-            query: 검색 쿼리
-            data: SerpApi 응답
-            
-        Returns:
-            GoogleSearchResult
-        """
-        
+        """검색 결과 파싱 (안전한 타입 체크 추가)"""
         results = []
         
         # 일반 검색 결과
@@ -174,11 +133,23 @@ class GoogleSearchAgent:
         # 지식 패널 (있는 경우)
         if 'knowledge_graph' in data:
             kg = data['knowledge_graph']
+            
+            # [핵심 수정] rating 필드가 딕셔너리가 아닌 float일 수 있음을 처리
+            rating_data = kg.get('rating')
+            rating_val = None
+            reviews_val = None
+            
+            if isinstance(rating_data, dict):
+                rating_val = rating_data.get('rating')
+                reviews_val = rating_data.get('reviews')
+            elif isinstance(rating_data, (float, int)):
+                rating_val = rating_data
+            
             results.insert(0, {
                 'title': kg.get('title', ''),
                 'description': kg.get('description', ''),
-                'rating': kg.get('rating', {}).get('rating', None),
-                'reviews': kg.get('rating', {}).get('reviews', None),
+                'rating': rating_val,
+                'reviews': reviews_val,
                 'type': 'knowledge_panel'
             })
         
@@ -189,18 +160,8 @@ class GoogleSearchAgent:
         )
     
     def _parse_hotel_prices(self, data: Dict) -> Dict[str, Any]:
-        """
-        호텔 가격 정보 파싱
-        
-        Args:
-            data: Google Hotels API 응답
-            
-        Returns:
-            가격 정보
-        """
-        
+        """호텔 가격 정보 파싱"""
         prices = []
-        
         for property in data.get('properties', [])[:5]:
             prices.append({
                 'provider': property.get('provider', 'Unknown'),
@@ -223,21 +184,17 @@ class GoogleSearchAgent:
         for p in prices:
             try:
                 price_str = str(p.get('price', ''))
-                # $ 기호와 쉼표 제거
                 price_clean = price_str.replace('$', '').replace(',', '')
                 if price_clean and price_clean != 'N/A':
                     valid_prices.append(float(price_clean))
             except:
                 continue
-        
         return sum(valid_prices) / len(valid_prices) if valid_prices else 0
     
     def _parse_attractions(self, data: Dict) -> List[Dict[str, Any]]:
         """관광지 정보 파싱"""
         attractions = []
-        
         for item in data.get('organic_results', []):
-            # 제목에 관광지 키워드가 있는 경우만
             title = item.get('title', '').lower()
             if any(word in title for word in ['museum', 'park', 'temple', 'palace', 
                                               'beach', 'market', 'tower', 'bridge']):
@@ -246,33 +203,24 @@ class GoogleSearchAgent:
                     'description': item.get('snippet', ''),
                     'link': item.get('link', '')
                 })
-        
         return attractions[:10]
     
     def _get_mock_results(self, hotel_name: str, location: str) -> GoogleSearchResult:
-        """모의 검색 결과 (API 키 없을 때)"""
-        
+        """모의 검색 결과"""
         mock_results = [
             {
                 'title': f"{hotel_name} - Official Website",
-                'link': f"https://www.{hotel_name.lower().replace(' ', '')}.com",
-                'snippet': f"Book directly at {hotel_name} in {location} for the best rates. Luxury accommodation with excellent amenities.",
+                'link': "#",
+                'snippet': f"Book directly at {hotel_name} in {location}. Best rates guaranteed.",
                 'source': 'Official Site'
             },
             {
                 'title': f"{hotel_name} Reviews - TripAdvisor",
-                'link': "https://www.tripadvisor.com",
-                'snippet': f"Read {hotel_name} reviews from real guests. Rated 4.5/5 based on 500+ reviews. 'Excellent location and service'",
+                'link': "#",
+                'snippet': f"Rated 4.5/5. See reviews for {hotel_name}.",
                 'source': 'TripAdvisor'
-            },
-            {
-                'title': f"{hotel_name} Booking.com",
-                'link': "https://www.booking.com",
-                'snippet': f"Book {hotel_name} with free cancellation. Prices from $150/night. Located in the heart of {location}.",
-                'source': 'Booking.com'
             }
         ]
-        
         return GoogleSearchResult(
             query=f"{hotel_name} {location}",
             results=mock_results,
@@ -281,50 +229,17 @@ class GoogleSearchAgent:
     
     def _get_mock_price_data(self, hotel_name: str) -> Dict[str, Any]:
         """모의 가격 데이터"""
-        
         import random
         base_price = random.randint(100, 300)
-        
         return {
             'hotel_name': hotel_name,
             'prices': [
                 {'provider': 'Booking.com', 'price': f"${base_price}", 'total_price': f"${base_price * 3}"},
-                {'provider': 'Hotels.com', 'price': f"${base_price + 10}", 'total_price': f"${(base_price + 10) * 3}"},
-                {'provider': 'Expedia', 'price': f"${base_price - 5}", 'total_price': f"${(base_price - 5) * 3}"}
+                {'provider': 'Hotels.com', 'price': f"${base_price + 10}", 'total_price': f"${(base_price + 10) * 3}"}
             ],
             'avg_price': base_price
         }
     
     def _get_mock_attractions(self, location: str) -> List[Dict[str, Any]]:
         """모의 관광지 데이터"""
-        
-        mock_attractions = {
-            'default': [
-                {'name': 'City Museum', 'description': 'Historic museum with local artifacts', 'link': '#'},
-                {'name': 'Central Park', 'description': 'Beautiful park in the city center', 'link': '#'},
-                {'name': 'Old Town Market', 'description': 'Traditional market with local goods', 'link': '#'},
-                {'name': 'Royal Palace', 'description': 'Historic palace with guided tours', 'link': '#'},
-                {'name': 'Art Gallery', 'description': 'Modern and contemporary art', 'link': '#'}
-            ],
-            'Bangkok': [
-                {'name': 'Grand Palace', 'description': 'Historic royal palace complex', 'link': '#'},
-                {'name': 'Wat Pho Temple', 'description': 'Temple of the Reclining Buddha', 'link': '#'},
-                {'name': 'Chatuchak Market', 'description': 'Massive weekend market', 'link': '#'},
-                {'name': 'Wat Arun', 'description': 'Temple of Dawn by the river', 'link': '#'},
-                {'name': 'Jim Thompson House', 'description': 'Traditional Thai house museum', 'link': '#'}
-            ],
-            'Paris': [
-                {'name': 'Eiffel Tower', 'description': 'Iconic iron lattice tower', 'link': '#'},
-                {'name': 'Louvre Museum', 'description': "World's largest art museum", 'link': '#'},
-                {'name': 'Notre-Dame Cathedral', 'description': 'Gothic cathedral', 'link': '#'},
-                {'name': 'Arc de Triomphe', 'description': 'Triumphal arch monument', 'link': '#'},
-                {'name': 'Sacré-Cœur', 'description': 'Basilica on Montmartre hill', 'link': '#'}
-            ]
-        }
-        
-        # 위치에 따른 관광지 반환
-        for key in mock_attractions:
-            if key.lower() in location.lower():
-                return mock_attractions[key]
-        
-        return mock_attractions['default']
+        return [{'name': 'City Center', 'description': 'Main attraction', 'link': '#'}]
