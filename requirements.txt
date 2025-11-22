@@ -4,16 +4,19 @@
 # Core
 python-dotenv==1.0.0
 pyyaml==6.0.1
-typing-extensions==4.8.0
+typing-extensions>=4.8.0
 
-# LangChain & LangGraph
-langchain==0.2.0
-langchain-openai==0.1.14
-langchain-community==0.2.0
-langgraph==0.1.17
+# LangChain & LangGraph (Updated for compatibility)
+langchain>=0.2.0
+langchain-openai>=0.1.14
+langchain-community>=0.2.0
+langchain-core>=0.2.0
+langchain-google-genai>=1.0.0  # [추가] Google Gemini 지원
+langgraph>=0.1.17
+langsmith>=0.1.0
 
 # LLM
-openai==1.32.0
+openai>=1.32.0
 
 # ElasticSearch & Embeddings
 elasticsearch==8.11.0
@@ -21,18 +24,20 @@ sentence-transformers==2.2.2
 
 # Data Processing
 datasets>=2.18.0,<3.0.0
-pandas==2.0.3
-numpy==1.24.3
-huggingface-hub==0.19.4
+pandas>=2.0.3
+numpy<2.0.0                    # [수정] Numpy 2.0 호환성 문제 방지
+huggingface-hub>=0.19.4
 
 # Web Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-pydantic==2.5.0
-aiohttp==3.9.0
+fastapi>=0.104.1
+uvicorn[standard]>=0.24.0
+pydantic>=2.5.0
+aiohttp>=3.9.0
+httpx>=0.27.0                  # [추가] HTTP 클라이언트
 
 # UI
-streamlit==1.28.0
+streamlit>=1.28.0
+protobuf>=4.25.3               # [추가] Streamlit 의존성 충돌 방지
 
 # Testing
 pytest==7.4.3
@@ -46,4 +51,3 @@ loguru==0.7.2
 black==23.11.0
 flake8==6.1.0
 mypy==1.7.0
-

@@ -52,15 +52,18 @@ class ElasticSearchRAG:
         self,
         es_host: str = "localhost",
         es_port: int = 9200,
+        es_user: str = "elastic",       # [추가] 기본 사용자
+        es_password: str = "changeme",  # [추가] 기본 비밀번호
         index_name: str = "art_hotel_reviews",
         embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     ):
         """
         초기화
-        
         Args:
             es_host: ElasticSearch 호스트
             es_port: ElasticSearch 포트
+            es_user: 사용자 ID
+            es_password: 사용자 비밀번호
             index_name: 인덱스 이름
             embedding_model: 임베딩 모델 이름
         """
@@ -68,6 +71,7 @@ class ElasticSearchRAG:
         # ElasticSearch 연결
         self.es = Elasticsearch(
             [{'host': es_host, 'port': es_port, 'scheme': 'http'}],
+            basic_auth=(es_user, es_password),  # [핵심 수정] 인증 정보 전달
             timeout=30,
             max_retries=3,
             retry_on_timeout=True
@@ -80,7 +84,7 @@ class ElasticSearchRAG:
         self.embedding_model = SentenceTransformer(embedding_model)
         self.embedding_dim = self.embedding_model.get_sentence_embedding_dimension()
         
-        logger.info(f"ElasticSearch RAG 초기화 완료: {es_host}:{es_port}")
+        logger.info(f"ElasticSearch RAG 초기화 완료: {es_host}:{es_port} (User: {es_user})")
     
     def create_index(self, force_recreate: bool = False):
         """
@@ -610,5 +614,16 @@ def get_rag_instance() -> ElasticSearchRAG:
     """RAG 싱글톤 인스턴스 반환"""
     global _rag_instance
     if _rag_instance is None:
-        _rag_instance = ElasticSearchRAG()
+        # 환경 변수 또는 기본값 사용
+        host = os.getenv("ES_HOST", "localhost")
+        port = int(os.getenv("ES_PORT", 9200))
+        user = os.getenv("ES_USER", "elastic")         # [추가]
+        password = os.getenv("ES_PASSWORD", "changeme") # [추가]
+        
+        _rag_instance = ElasticSearchRAG(
+            es_host=host,
+            es_port=port,
+            es_user=user,          # [추가]
+            es_password=password   # [추가]
+        )
     return _rag_instance
