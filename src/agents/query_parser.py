@@ -36,8 +36,19 @@ class QueryParserAgent:
         
         self.output_parser = PydanticOutputParser(pydantic_object=ParsedTravelQuery)
         
+        # [수정] 프롬프트에 Context 섹션 추가
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", """당신은 여행 계획 전문가입니다. 사용자의 자연어 질문에서 여행 관련 정보를 JSON 형식으로 정확하게 추출하세요.
+
+[현재 계획된 여행 정보]
+목적지: {current_destination}
+날짜: {current_dates}
+인원: {current_traveler_count}
+
+[지시사항]
+1. 사용자의 질문이 '새로운 여행' 요청이면 위 [현재 계획된 여행 정보]를 무시하고 새로 추출하세요.
+2. 사용자의 질문이 '기존 계획 수정'(예: "이틀 더", "인원 추가")이면, [현재 계획된 여행 정보]를 기준으로 새로운 값을 계산하여 추출하세요.
+   - 예: 현재 날짜가 2025-12-01 ~ 2025-12-03이고 사용자가 "이틀 더 묵을래"라고 하면, check_out_date는 2025-12-05가 되어야 합니다.
 
 [중요] 검색 정확도를 위해 다음 필드는 반드시 **영어(English)**로 번역해서 추출해야 합니다:
 - destination (예: '파리' -> 'Paris', '방콕' -> 'Bangkok')
@@ -51,11 +62,27 @@ class QueryParserAgent:
         ])
         logger.info("QueryParserAgent(Gemini) 초기화 완료")
     
-    async def parse(self, user_query: str) -> Dict[str, Any]:
+    # [수정] current_state 인자 추가
+    async def parse(self, user_query: str, current_state: Dict[str, Any] = None) -> Dict[str, Any]:
         try:
+            # 현재 상태에서 정보 추출 (없으면 기본값)
+            current_dest = "없음"
+            current_dates = "없음"
+            current_count = "1"
+            
+            if current_state:
+                current_dest = current_state.get('destination') or "없음"
+                dates = current_state.get('travel_dates')
+                if dates:
+                    current_dates = f"{dates[0]} ~ {dates[1]}"
+                current_count = str(current_state.get('traveler_count') or 1)
+
             messages = self.prompt.format_messages(
                 query=user_query,
                 current_date=datetime.now().strftime("%Y-%m-%d"),
+                current_destination=current_dest,
+                current_dates=current_dates,
+                current_traveler_count=current_count,
                 format_instructions=self.output_parser.get_format_instructions()
             )
             
@@ -68,18 +95,22 @@ class QueryParserAgent:
             return self._fallback_parse(user_query)
     
     def _post_process(self, parsed: ParsedTravelQuery, original_query: str) -> Dict[str, Any]:
+        # 기존 로직 동일
         result = {
             'destination': parsed.destination,
             'dates': None,
-            'traveler_count': parsed.traveler_count or 1,
+            'traveler_count': parsed.traveler_count, # [수정] None일 경우 workflow에서 처리하도록 변경
             'preferences': {}
         }
         if parsed.check_in_date:
             try:
                 check_in = datetime.strptime(parsed.check_in_date, "%Y-%m-%d")
-                check_out = check_in + timedelta(days=3)
+                # 체크아웃 날짜가 없으면 기본 3박으로 설정하던 로직 유지하되, 
+                # 멀티턴에서는 LLM이 체크아웃 날짜를 계산해서 줄 것이므로 그대로 사용
                 if parsed.check_out_date:
                     check_out = datetime.strptime(parsed.check_out_date, "%Y-%m-%d")
+                else:
+                    check_out = check_in + timedelta(days=3)
                 result['dates'] = [parsed.check_in_date, check_out.strftime("%Y-%m-%d")]
             except: pass
             
@@ -92,4 +123,4 @@ class QueryParserAgent:
 
     def _fallback_parse(self, user_query: str) -> Dict[str, Any]:
         logger.warning("LLM 파싱 실패, 규칙 기반 파싱 시도")
-        return {'destination': None, 'dates': None, 'traveler_count': 1, 'preferences': {}}
+        return {'destination': None, 'dates': None, 'traveler_count': None, 'preferences': {}}
