@@ -93,7 +93,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 헤더
-st.markdown('<h1 class="main-header">�� AgenticTravelRAG</h1>', unsafe_allow_html=True)
+st.markdown('<h1 class="main-header">🌍 AgenticTravelRAG</h1>', unsafe_allow_html=True)
 st.markdown('<p class="sub-header">Google Gemini & TripAdvisor 리뷰 기반 지능형 여행 플래너</p>', unsafe_allow_html=True)
 
 # 사이드바
