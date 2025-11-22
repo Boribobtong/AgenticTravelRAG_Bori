@@ -19,21 +19,21 @@ echo "Directory structure created successfully!"
 echo "
 ART-project/
 ├── src/
-│   ├── agents/         # LangGraph agents
-│   ├── tools/          # External API tools  
-│   ├── rag/            # RAG pipeline
-│   ├── core/           # Core logic
+│   ├── agents/         # LangGraph agents (QueryParser, HotelRAG, Weather, GoogleSearch, ResponseGenerator)
+│   ├── tools/          # External API tools (SerpApi, Open-Meteo)
+│   ├── rag/            # ElasticSearch RAG pipeline
+│   ├── core/           # Core logic (State management, Workflow definition)
 │   ├── api/            # FastAPI endpoints
-│   └── ui/             # Streamlit UI
+│   └── ui/             # Streamlit UI dashboard
 ├── data/
-│   ├── raw/            # Raw datasets
+│   ├── raw/            # Raw datasets (TripAdvisor reviews)
 │   ├── processed/      # Processed data
 │   ├── embeddings/     # Vector embeddings
-│   └── scripts/        # ETL scripts
-├── config/             # Configuration files
-├── tests/              # Test suites
-├── docs/               # Documentation
-├── docker/             # Docker configs
-├── notebooks/          # Jupyter notebooks
+│   └── scripts/        # ETL scripts (Download, Indexing with synthetic metadata)
+├── config/             # Configuration files (.env, config.yaml)
+├── tests/              # Test suites (Unit, Integration, E2E)
+├── docs/               # Documentation (API, Guides, Architecture)
+├── docker/             # Docker configs (ElasticSearch, App)
+├── notebooks/          # Jupyter notebooks for experiments
 └── logs/               # Application logs
 "
