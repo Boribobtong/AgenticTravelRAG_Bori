@@ -1,220 +1,173 @@
 # 🚀 AgenticTravelRAG Quick Start Guide
 
+> **Google Gemini**와 **LangGraph**를 활용한 TripAdvisor 리뷰 기반 여행 플래너를 빠르게 시작하는 가이드입니다.
+
 ## 📋 프로젝트 개요
-**AgenticTravelRAG**는 TripAdvisor 리뷰 데이터를 기반으로 사용자가 자연어로 여행 요구사항을 질문하면 관련 호텔과 액티비티를 찾아주고 맞춤형 여행 일정을 제안하는 Agentic RAG 기반 지능형 여행 플래너입니다.
 
-## 🎯 팀원별 작업 가이드
+\*\*AgenticTravelRAG (A.R.T)\*\*는 사용자의 복잡한 여행 요구사항(예: "파리에서 12월에 묵을 낭만적인 호텔")을 이해하고, TripAdvisor 리뷰 데이터와 실시간 정보(날씨, 검색)를 결합하여 최적의 여행 일정을 제안하는 지능형 에이전트 시스템입니다.
 
-### 1️⃣ 프로젝트 시작하기
+-----
+
+## 🏁 10분 안에 시작하기 (For Developers)
+
+### 1️⃣ 환경 설정
+
+**1. 저장소 클론**
 
 ```bash
-# 저장소 클론
 git clone https://github.com/YOUR_TEAM/AgenticTravelRAG.git
 cd AgenticTravelRAG
+```
 
-# 가상환경 생성 및 활성화
+**2. 가상환경 생성 및 활성화**
+
+```bash
+# 가상환경 생성
 python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 의존성 설치
+# 활성화 (Mac/Linux)
+source venv/bin/activate
+# 활성화 (Windows)
+venv\Scripts\activate
+```
+
+**3. 의존성 설치**
+
+```bash
 pip install -r requirements.txt
-
-# 환경변수 설정
-cp config/.env.example .env
-# .env 파일을 열어 필요한 API 키 입력
 ```
 
-### 2️⃣ 역할별 작업 폴더
-
-#### 🔧 **백엔드 개발자**
-- **작업 폴더**: `src/core/`, `src/api/`
-- **주요 파일**:
-  - `src/core/workflow.py` - LangGraph 워크플로우
-  - `src/core/state.py` - 상태 관리
-- **할 일**:
-  - FastAPI 엔드포인트 구현 (`src/api/main.py`)
-  - 워크플로우 최적화
-
-#### 🤖 **AI/ML 엔지니어**
-- **작업 폴더**: `src/agents/`, `src/rag/`
-- **주요 파일**:
-  - `src/agents/*.py` - 각종 에이전트
-  - `src/rag/elasticsearch_rag.py` - RAG 파이프라인
-- **할 일**:
-  - 에이전트 성능 개선
-  - 임베딩 모델 최적화
-  - 프롬프트 엔지니어링
-
-#### 📊 **데이터 엔지니어**
-- **작업 폴더**: `data/scripts/`
-- **할 일**:
-  - TripAdvisor 데이터 ETL 파이프라인 구축
-  - ElasticSearch 인덱싱 스크립트 작성
-  - 데이터 전처리 최적화
-
-#### 🎨 **프론트엔드 개발자**
-- **작업 폴더**: `src/ui/`
-- **할 일**:
-  - Streamlit UI 개발 (`src/ui/app.py`)
-  - 사용자 인터페이스 개선
-  - 대화형 챗봇 UI 구현
-
-### 3️⃣ 개발 워크플로우
+**4. 환경변수 설정**
+`.env` 파일을 생성하고 API 키를 입력합니다.
 
 ```bash
-# 1. 최신 코드 가져오기
-git checkout develop
-git pull origin develop
-
-# 2. 기능 브랜치 생성
-git checkout -b feature/기능명
-
-# 3. 개발 작업
-# ... 코드 작성 ...
-
-# 4. 테스트 실행
-pytest tests/
-
-# 5. 커밋
-git add .
-git commit -m "feat: 기능 설명"
-
-# 6. 푸시 및 PR 생성
-git push origin feature/기능명
-# GitHub에서 PR 생성 → develop 브랜치로
+cp config/.env.example config/.env
 ```
 
-### 4️⃣ ElasticSearch 설정
+`config/.env` 파일을 열어 다음 키를 입력하세요:
+
+  * `GOOGLE_API_KEY`: Google AI Studio에서 발급받은 Gemini API 키
+  * `SERP_API_KEY` (선택): Google 검색을 위한 SerpApi 키 (없으면 모의 데이터 사용)
+
+-----
+
+### 2️⃣ 데이터베이스 및 데이터 준비
+
+A.R.T는 **ElasticSearch**를 벡터 데이터베이스로 사용합니다.
+
+**1. ElasticSearch 실행 (Docker)**
 
 ```bash
-# Docker로 ElasticSearch 실행
-docker run -d \
-  --name elasticsearch \
-  -p 9200:9200 \
-  -e "discovery.type=single-node" \
-  -e "xpack.security.enabled=false" \
-  docker.elastic.co/elasticsearch/elasticsearch:8.11.0
-
-# 연결 확인
-curl http://localhost:9200
+docker-compose -f docker/docker-compose.yml up -d elasticsearch
 ```
 
-### 5️⃣ 데이터 준비
+  * 실행 확인: 브라우저에서 `http://localhost:9200` 접속
 
-```python
-# data/scripts/download_data.py 생성
-from datasets import load_dataset
-
-# TripAdvisor 데이터셋 로드
-dataset = load_dataset("jniimi/tripadvisor-review-rating")
-dataset.save_to_disk("data/raw/tripadvisor")
-```
-
-### 6️⃣ 애플리케이션 실행
+**2. 데이터 다운로드 및 인덱싱**
+TripAdvisor 리뷰 데이터를 다운로드하고, 가상의 메타데이터(도시, 호텔명)를 주입하여 인덱싱합니다.
 
 ```bash
-# API 서버 실행 (터미널 1)
-cd src/api
-uvicorn main:app --reload --port 8000
+# 데이터 다운로드
+python -m data.scripts.download_data
 
-# Streamlit UI 실행 (터미널 2)
+# 데이터 인덱싱 (Embedding 생성 포함)
+python -m data.scripts.index_to_elastic
+```
+
+  * 완료 시 로그: `인덱싱 완료! 총 문서 수: 5000`
+
+-----
+
+### 3️⃣ 서비스 실행
+
+두 개의 터미널 창을 열어 각각 실행합니다.
+
+**터미널 1: Backend API 서버**
+
+```bash
+uvicorn src.api.main:app --reload --port 8000
+```
+
+  * API 문서: `http://localhost:8000/docs`
+
+**터미널 2: Frontend UI**
+
+```bash
 streamlit run src/ui/app.py
-
-# 접속
-# API: http://localhost:8000/docs
-# UI: http://localhost:8501
 ```
 
-## 📁 핵심 파일 설명
+  * 접속 주소: `http://localhost:8501`
 
-| 파일 | 설명 | 담당자 |
-|------|------|--------|
-| `src/core/workflow.py` | LangGraph 메인 워크플로우 | 백엔드 |
-| `src/core/state.py` | AppState 정의 및 관리 | 백엔드 |
-| `src/agents/query_parser.py` | 사용자 쿼리 파싱 | AI/ML |
-| `src/agents/hotel_rag.py` | 호텔 RAG 검색 | AI/ML |
-| `src/agents/weather_tool.py` | 날씨 정보 조회 | AI/ML |
-| `src/agents/google_search.py` | 구글 검색 | AI/ML |
-| `src/agents/response_generator.py` | 최종 응답 생성 | AI/ML |
-| `src/rag/elasticsearch_rag.py` | ElasticSearch RAG | 데이터 |
-| `data/scripts/index_to_elastic.py` | ES 인덱싱 (생성 필요) | 데이터 |
-| `src/api/main.py` | FastAPI 서버 (생성 필요) | 백엔드 |
-| `src/ui/app.py` | Streamlit UI (생성 필요) | 프론트 |
+-----
 
-## 🧪 테스트 가이드
+## 🎯 팀원별 역할 가이드
+
+### 🔧 **백엔드 개발자**
+
+  * **주요 관심사**: LangGraph 워크플로우, 상태 관리, API 최적화
+  * **핵심 파일**:
+      * `src/core/workflow.py`: 에이전트 간 흐름 제어 및 라우팅 로직
+      * `src/core/state.py`: AppState 데이터 구조 정의
+      * `src/api/main.py`: FastAPI 엔드포인트 및 비동기 처리
+
+### 🤖 **AI/ML 엔지니어**
+
+  * **주요 관심사**: 프롬프트 엔지니어링, RAG 성능 개선, 모델 튜닝
+  * **핵심 파일**:
+      * `src/agents/query_parser.py`: 사용자 의도 파악 및 JSON 추출 (Gemini 2.5 Flash)
+      * `src/agents/response_generator.py`: 최종 응답 생성 및 페르소나 설정 (Gemini 2.5 Pro)
+      * `src/rag/elasticsearch_rag.py`: 하이브리드 검색(BM25 + Vector) 로직
+
+### 📊 **데이터 엔지니어**
+
+  * **주요 관심사**: 데이터 파이프라인, 벡터 DB 관리, 인덱싱 효율화
+  * **핵심 파일**:
+      * `data/scripts/index_to_elastic.py`: 데이터 전처리 및 메타데이터 주입 로직
+      * `docker/docker-compose.yml`: ElasticSearch 컨테이너 설정
+
+### 🎨 **프론트엔드 개발자**
+
+  * **주요 관심사**: 사용자 경험(UX), Streamlit UI 커스터마이징
+  * **핵심 파일**:
+      * `src/ui/app.py`: Streamlit 대시보드 구성 및 API 연동
+
+-----
+
+## 🧪 테스트 실행 방법
+
+안정적인 개발을 위해 테스트 코드가 준비되어 있습니다.
+
+**단위 테스트 (Unit Test)**
+개별 에이전트의 동작을 Mock 객체로 검증합니다.
 
 ```bash
-# 전체 테스트
-pytest tests/
-
-# 특정 모듈 테스트
-pytest tests/unit/test_agents.py
-
-# 커버리지 확인
-pytest --cov=src tests/
+python -m pytest tests/unit/test_agents.py
 ```
 
-## 📝 커밋 메시지 규칙
+**통합 테스트 (Integration Test)**
+전체 워크플로우의 흐름과 상태 전이를 검증합니다.
 
-```
-feat: 새로운 기능
-fix: 버그 수정
-docs: 문서 수정
-style: 코드 스타일 변경
-refactor: 리팩토링
-test: 테스트 추가/수정
-chore: 빌드/설정 변경
-```
-
-## 🔑 필요한 API 키
-
-| API | 용도 | 발급처 | 환경변수 |
-|-----|------|--------|----------|
-| OpenAI | LLM | https://platform.openai.com | `OPENAI_API_KEY` |
-| SerpApi | 구글 검색 | https://serpapi.com | `SERP_API_KEY` |
-
-## 🐛 문제 해결
-
-### ElasticSearch 연결 오류
 ```bash
-# ElasticSearch 상태 확인
-curl http://localhost:9200/_cluster/health
-
-# Docker 로그 확인
-docker logs elasticsearch
+python -m pytest tests/integration/test_workflow.py
 ```
 
-### 임포트 오류
-```bash
-# PYTHONPATH 설정
-export PYTHONPATH="${PYTHONPATH}:${PWD}"
-```
+-----
 
-### API 키 오류
-```bash
-# .env 파일 확인
-cat .env
+## 🐛 자주 발생하는 문제 (Troubleshooting)
 
-# 환경변수 로드 확인
-python -c "import os; from dotenv import load_dotenv; load_dotenv(); print(os.getenv('OPENAI_API_KEY'))"
-```
+### Q1. ElasticSearch 연결 오류 (`ConnectionRefused` 등)
 
-## 📞 팀 소통
+  * **해결**: `.env` 파일의 `ES_HOST`가 `localhost`로 설정되어 있는지 확인하세요. (Docker 내부 통신용 `elasticsearch`로 설정되어 있으면 로컬 실행 시 실패합니다.)
+  * **확인**: `curl http://localhost:9200` 명령어로 응답이 오는지 확인하세요.
 
-- **코드 리뷰**: GitHub PR
-- **이슈 트래킹**: GitHub Issues  
-- **일반 토론**: GitHub Discussions
-- **실시간 소통**: Slack/Discord (팀 채널)
+### Q2. Gemini API 오류 (`404 Not Found`)
 
-## 🚀 다음 단계
+  * **해결**: 사용 중인 Gemini 모델(`gemini-1.5-pro` 등)이 만료되었을 수 있습니다. `src/agents/*.py` 파일에서 모델명을 최신 버전(`gemini-2.5-flash` 등)으로 변경하세요.
 
-1. [ ] ElasticSearch에 TripAdvisor 데이터 인덱싱
-2. [ ] FastAPI 엔드포인트 구현
-3. [ ] Streamlit UI 개발
-4. [ ] 통합 테스트 작성
-5. [ ] Docker 컨테이너화
-6. [ ] CI/CD 파이프라인 구축
+### Q3. 날씨 정보가 안 나와요
 
----
+  * **해결**: 날짜 정보가 없으면 날씨 조회를 건너뜁니다. 질문에 구체적인 날짜(예: "12월 25일부터")를 포함해 보세요. 또한, 너무 먼 미래(14일 이후)의 날씨는 조회되지 않습니다.
 
-**문의사항이 있으면 GitHub Issues에 등록해주세요!** 🙏
+-----
+
+**Happy Coding\!** ✈️
