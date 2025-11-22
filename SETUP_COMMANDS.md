@@ -1,158 +1,103 @@
-# 🚀 AgenticTravelRAG - 실제 사용 명령어
+# 🛠️ AgenticTravelRAG - 명령어 치트시트 (Cheat Sheet)
 
-## 🔧 로컬에서 프로젝트 시작하기
+이 문서는 개발 중 자주 사용하는 명령어들을 빠르게 찾아 복사/붙여넣기 할 수 있도록 모아둔 **치트시트**입니다. 상세한 설치 과정과 설명은 [QUICK_START.md](https://www.google.com/search?q=QUICK_START.md)를 참고하세요.
 
-### 방법 1: 파일 다운로드 후 시작
-```bash
-# 1. 파일 다운로드 (Claude에서 다운로드 링크 제공된 경우)
-# 또는 수동으로 파일 복사
+## ⚡️ 빠른 실행 (Quick Run)
 
-# 2. 프로젝트 폴더로 이동
-cd AgenticTravelRAG
+### 1. 초기 설정 (First Setup)
 
-# 3. 실행 권한 부여 (macOS/Linux)
-chmod +x init_git.sh setup_dirs.sh
-
-# 4. 폴더 구조 생성
-./setup_dirs.sh
-
-# 5. Git 초기화
-./init_git.sh
 ```
-
-### 방법 2: 수동으로 Git 초기화
-```bash
-# 1. 프로젝트 폴더 이동
-cd AgenticTravelRAG
-
-# 2. 폴더 구조 생성
-bash setup_dirs.sh
-# 또는 직접 생성
-mkdir -p src/{agents,tools,rag,core,api,ui}
-mkdir -p data/{raw,processed,scripts,embeddings}
-mkdir -p config tests/{unit,integration,e2e}
-mkdir -p docs/{api,guides,architecture}
-mkdir -p docker/{elasticsearch,app}
-mkdir -p notebooks logs
-
-# 3. Git 초기화
-git init
-git branch -M main
-git add .
-git commit -m "feat: Initial project structure with core agents"
-
-# 4. GitHub 연결
-git remote add origin https://github.com/b8goal/AgenticTravelRAG.git
-git push -u origin main
-```
-
-### 방법 3: GitHub에서 바로 시작
-```bash
-# 1. GitHub에서 새 레포지토리 생성 (AgenticTravelRAG)
-
-# 2. 로컬에 클론
-git clone https://github.com/b8goal/AgenticTravelRAG.git
-cd AgenticTravelRAG
-
-# 3. 파일 복사
-# 생성된 모든 파일을 이 폴더에 복사
-
-# 4. 커밋 및 푸시
-git add .
-git commit -m "feat: Initial project structure"
-git push origin main
-```
-
-## 📂 필수 __init__.py 파일 생성
-```bash
-# 모든 Python 패키지 폴더에 __init__.py 생성
-touch src/__init__.py
-touch src/core/__init__.py
-touch src/agents/__init__.py
-touch src/rag/__init__.py
-touch src/tools/__init__.py
-touch src/api/__init__.py
-touch src/ui/__init__.py
-touch data/scripts/__init__.py
-touch tests/__init__.py
-touch tests/unit/__init__.py
-touch tests/integration/__init__.py
-touch tests/e2e/__init__.py
-```
-
-## 🐍 Python 환경 설정
-```bash
-# 가상환경 생성
+# 가상환경 생성 및 활성화
 python -m venv venv
-
-# 활성화 (macOS/Linux)
+# Mac/Linux
 source venv/bin/activate
-
-# 활성화 (Windows)
+# Windows
 venv\Scripts\activate
 
-# 패키지 설치
+# 의존성 설치
 pip install -r requirements.txt
+
+# 환경변수 설정 (.env 파일 수정 필요)
+cp config/.env.example config/.env
+
+# 데이터베이스 실행
+docker-compose -f docker/docker-compose.yml up -d elasticsearch
+
+# 데이터 준비 (순서 준수)
+python -m data.scripts.download_data
+python -m data.scripts.index_to_elastic
+
 ```
 
-## 🔑 환경변수 설정
-```bash
-# .env 파일 생성
-cat > .env << EOF
-# OpenAI
-OPENAI_API_KEY=your_openai_key_here
+### 2. 서비스 실행 (Run Services)
 
-# SerpApi (Google Search)
-SERP_API_KEY=your_serpapi_key_here
+각각 다른 터미널에서 실행하세요.
 
-# ElasticSearch
-ELASTICSEARCH_HOST=localhost
-ELASTICSEARCH_PORT=9200
+**Terminal 1: API Server**
 
-# Logging
-LOG_LEVEL=INFO
-EOF
+```
+uvicorn src.api.main:app --reload --port 8000
+
 ```
 
-## 🐳 ElasticSearch 실행
-```bash
-# Docker로 실행
-docker run -d \
-  --name elasticsearch \
-  -p 9200:9200 \
-  -e "discovery.type=single-node" \
-  -e "xpack.security.enabled=false" \
-  docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+**Terminal 2: UI App**
 
-# 확인
-curl http://localhost:9200
 ```
-
-## 🧪 테스트 실행
-```bash
-# 전체 테스트
-pytest tests/
-
-# 특정 테스트
-pytest tests/unit/test_agents.py -v
-```
-
-## 🎯 애플리케이션 실행
-```bash
-# API 서버 (개발 필요)
-cd src/api
-python main.py
-
-# Streamlit UI (개발 필요)
 streamlit run src/ui/app.py
+
 ```
 
-## ⚠️ 주의사항
-1. Windows에서는 `./` 대신 `bash` 명령어 사용
-2. 권한 오류 시 `sudo` 사용 (Linux/macOS)
-3. Python 3.9+ 필요
+## 🧪 테스트 및 검증 (Test & Verify)
 
-## 📞 문제 해결
-- 파일이 없다는 오류: 전체 경로 확인
-- 권한 오류: `chmod +x` 또는 `bash` 사용
-- 임포트 오류: `export PYTHONPATH=$PWD:$PYTHONPATH`
+### 테스트 코드 실행
+
+```
+# 단위 테스트 (API 호출 없이 로직 검증)
+python -m pytest tests/unit/test_agents.py -v
+
+# 통합 테스트 (전체 워크플로우 흐름 검증)
+python -m pytest tests/integration/test_workflow.py -v
+
+```
+
+### 데이터베이스 상태 확인
+
+```
+# ElasticSearch 연결 확인
+curl http://localhost:9200
+
+# 인덱스 목록 및 상태 확인
+curl http://localhost:9200/_cat/indices?v
+
+```
+
+### Docker 관리
+
+```
+# 실행 중인 컨테이너 확인
+docker ps
+
+# DB 초기화 (데이터 삭제 후 재시작 - 주의!)
+docker-compose -f docker/docker-compose.yml down -v
+docker-compose -f docker/docker-compose.yml up -d elasticsearch
+
+```
+
+## 📂 유틸리티 (Utilities)
+
+### 프로젝트 구조 생성
+
+`setup_dirs.sh` 스크립트를 사용하여 초기 폴더 구조를 생성할 수 있습니다.
+
+```
+chmod +x setup_dirs.sh
+./setup_dirs.sh
+
+```
+
+## ⚠️ 트러블슈팅 팁 (Troubleshooting Tips)
+
+1. **Python 실행 경로**: 모든 `python -m ...` 명령어는 반드시 프로젝트 **루트 폴더**(`AgenticTravelRAG/`)에서 실행해야 합니다.
+2. **환경 변수 오류**: 로컬 실행 시 `.env` 파일의 `ES_HOST`는 반드시 `localhost`여야 합니다. (`elasticsearch`는 Docker 내부 통신용)
+3. **API 키 오류**: Gemini API 호출 실패 시 `config/.env` 파일의 `GOOGLE_API_KEY`가 올바른지 확인하세요.
+4. **의존성 충돌**: 패키지 에러 발생 시 `pip install -r requirements.txt`를 다시 실행하여 버전을 맞추세요.

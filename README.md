@@ -1,155 +1,186 @@
-# 🌍 AgenticTravelRAG (A.R.T - Agentic RAG Traveler)
+# 🌍 AgenticTravelRAG (A.R.T)
 
-> **TripAdvisor 리뷰 데이터를 기반으로, 사용자가 자연어로 여행 요구사항을 질문하면 관련 호텔·액티비티를 찾아주고 맞춤형 여행 일정을 제안하는 Agentic RAG 기반 지능형 여행 플래너**
+> **Google Gemini와 LangGraph를 활용한 TripAdvisor 리뷰 기반 에이전틱 여행 플래너**
+>
+> 사용자의 복잡한 여행 요구사항을 이해하고, 리뷰 데이터와 실시간 정보(날씨, 검색)를 결합하여 최적의 여행 일정을 제안합니다.
 
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![LangGraph](https://img.shields.io/badge/LangGraph-0.2.0-green.svg)](https://github.com/langchain-ai/langgraph)
-[![ElasticSearch](https://img.shields.io/badge/ElasticSearch-8.x-yellow.svg)](https://www.elastic.co/)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
+[![LangChain](https://img.shields.io/badge/LangChain-0.2.0+-orange.svg)](https://github.com/langchain-ai/langchain)
+[![LangGraph](https://img.shields.io/badge/LangGraph-0.1.17-green.svg)](https://github.com/langchain-ai/langgraph)
+[![OpenAI](https://img.shields.io/badge/OpenAI-1.32.0+-blue.svg)](https://platform.openai.com/)
+[![ElasticSearch](https://img.shields.io/badge/ElasticSearch-8.11.0-yellow.svg)](https://www.elastic.co/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.104.1+-teal.svg)](https://fastapi.tiangolo.com/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.28.0+-red.svg)](https://streamlit.io/)
+[![Datasets](https://img.shields.io/badge/Datasets-2.18.0+-lightgrey.svg)](https://huggingface.co/docs/datasets)
+[![SentenceTransformers](https://img.shields.io/badge/SentenceTransformers-2.2.2-purple.svg)](https://www.sbert.net/)
+
 
 ## 📋 목차
-- [개요](#개요)
-- [핵심 기능](#핵심-기능)
-- [아키텍처](#아키텍처)
-- [시작하기](#시작하기)
-- [프로젝트 구조](#프로젝트-구조)
-- [API 문서](#api-문서)
-- [기여 가이드](#기여-가이드)
+
+  - [개요]
+  - [핵심 기능]
+  - [시스템 아키텍처]
+  - [기술 스택]
+  - [설치 및 실행]
+  - [프로젝트 구조]
+  - [데이터셋 처리]
+
+-----
 
 ## 🎯 개요
 
-A.R.T는 **실제 여행자 리뷰 텍스트 데이터를 활용하여, 단순한 키워드 매칭을 넘어 사용자의 추상적이고 복잡한 요구사항을 이해하는** 차세대 여행 플래너입니다.
+A.R.T는 단순한 키워드 매칭을 넘어, \*\*LLM(Google Gemini)\*\*의 추론 능력과 **ElasticSearch**의 하이브리드 검색을 결합한 차세대 여행 에이전트입니다.
 
-### 왜 A.R.T인가?
+### 💡 기존 여행 검색의 한계 vs A.R.T의 혁신
 
-기존 여행 검색 서비스의 한계:
-- ❌ "조용하고 낭만적인 호텔" 같은 추상적 요구 이해 불가
-- ❌ 실시간 날씨나 가격 정보 미반영
-- ❌ 대화형 피드백 불가능
+| 기존 검색 서비스 | 🚀 A.R.T (Agentic RAG Traveler) |
+|------------------|-----------------------------------|
+| "호텔 파리" 단순 키워드 검색 | **"파리에서 12월에 묵을 조용하고 낭만적인 호텔"** 등 추상적 의도 이해 |
+| 정적인 데이터베이스 정보만 제공 | **실시간 날씨, 최신 가격 정보**를 에이전트가 직접 수집하여 반영 |
+| 일방적인 정보 전달 | **Multi-turn 대화**를 통해 예산 조정, 일정 변경 등 상호작용 가능 |
+| 언어 장벽 존재 | **한국어 쿼리 자동 번역**을 통해 글로벌 리뷰 데이터 검색 가능 |
 
-A.R.T의 혁신:
-- ✅ **리뷰 텍스트 기반 시맨틱 검색**으로 추상적 요구사항 이해
-- ✅ **실시간 API 연동**으로 날씨, 가격 정보 제공
-- ✅ **Multi-turn 대화**로 점진적 계획 수정
+-----
 
 ## 🚀 핵심 기능
 
-### 1. 🔍 리뷰 기반 하이브리드 호텔 검색 (RAG)
-- **정형 조건**: "무료 주차", "조식 포함" 등
-- **비정형 조건**: "분위기 좋은", "가족 친화적인" 등
-- **ElasticSearch 하이브리드 검색** (BM25 + 시맨틱)
+### 1\. 🧠 Agentic Workflow (LangGraph)
 
-### 2. 🌐 외부 도구 연동 (Agentic Tools)
-- **날씨 정보**: Open-Meteo API (무료)
-- **실시간 가격**: Google 검색 (SerpApi)
-- **지도 정보**: 위치 기반 추천
+  - **Query Parser**: 자연어 질문에서 목적지, 날짜, 예산, 선호도(분위기, 편의시설)를 정교하게 추출
+  - **Router**: 질문의 의도에 따라 호텔 검색, 날씨 조회, 일반 대화 등으로 경로 자동 분기
+  - **Self-Correction**: 검색 결과가 없거나 부족할 경우, 검색 조건을 완화하거나 대체 방법을 스스로 모색
 
-### 3. 💬 Multi-Turn 대화형 일정 생성
-- 컨텍스트 유지 및 메모리 관리
-- 사용자 피드백 반영
-- 점진적 계획 개선
+### 2\. 🔍 Hybrid RAG (ElasticSearch)
 
-## 🏗️ 아키텍처
+  - **BM25(키워드) + Vector(시맨틱)** 하이브리드 검색 구현
+  - 리뷰 텍스트의 감성 분석을 통해 "친절한 직원", "맛있는 조식" 같은 정성적 조건 필터링
+
+### 3\. 🌐 Multi-Modal Tool Use
+
+  - **Google Gemini 2.5 (Flash/Pro)**: 고성능 추론 및 응답 생성
+  - **Open-Meteo API**: 여행 기간 및 지역에 맞춘 정확한 날씨 예보 제공
+  - **SerpApi (Google Search)**: 최신 호텔 가격 및 관광지 정보 보강
+
+-----
+
+## 🏗️ 시스템 아키텍처
 
 ```mermaid
 graph TD
-    A[User Query] --> B[LangGraph Orchestrator]
-    B --> C[Query Parser]
-    C --> D{Router}
-    D -->|Hotel| E[Hotel RAG Agent]
-    D -->|Weather| F[Weather Tool Agent]
-    D -->|Search| G[Google Search Agent]
-    E --> H[ElasticSearch]
-    H --> I[TripAdvisor Reviews]
-    F --> J[Open-Meteo API]
-    G --> K[SerpApi]
-    E --> L[Response Generator]
-    F --> L
-    G --> L
-    L --> M[Final Response]
+    User[User Input] --> Parser[Query Parser Agent]
+    Parser --> Router{Router}
+    
+    Router -->|Hotel Search| Hotel[Hotel RAG Agent]
+    Router -->|Weather Info| Weather[Weather Tool Agent]
+    Router -->|General Info| Search[Google Search Agent]
+    
+    Hotel --> ES[(ElasticSearch)]
+    Weather --> Meteo[Open-Meteo API]
+    Search --> Serp[SerpApi]
+    
+    Hotel --> Generator[Response Generator]
+    Weather --> Generator
+    Search --> Generator
+    
+    Generator -->|Draft Plan| User
+    User -->|Feedback| Feedback[Feedback Handler]
+    Feedback -->|Refinement| Hotel
 ```
 
-## 🚦 시작하기
+-----
 
-### 전제 조건
-- Python 3.9+
-- Docker & Docker Compose
-- Git
+## 🔧 기술 스택
 
-### 빠른 시작
+  - **Language Model**: Google Gemini 2.5 Flash (Parsing) / Pro (Generation)
+  - **Orchestration**: LangGraph, LangChain
+  - **Search Engine**: ElasticSearch 8.14
+  - **Embedding**: sentence-transformers/all-MiniLM-L6-v2
+  - **Backend**: FastAPI, Uvicorn
+  - **Frontend**: Streamlit
+  - **External APIs**: Open-Meteo, SerpApi
+
+-----
+
+## 🚦 설치 및 실행
+
+### 1\. 사전 준비
+
+  - Docker & Docker Compose
+  - Python 3.9+
+  - **Google AI Studio API Key** (Gemini 사용)
+
+### 2\. 환경 설정
 
 ```bash
-# 1. 저장소 클론
-git clone git@github.com:b8goal/AgenticTravelRAG.git
+# 저장소 클론
+git clone https://github.com/b8goal/AgenticTravelRAG.git
 cd AgenticTravelRAG
 
-# 2. 환경 설정
-make setup
+# 의존성 설치
+pip install -r requirements.txt
 
-# 3. 서비스 시작
-make start
-
-# 4. 테스트
-make test
+# 환경변수 설정
+cp config/.env.example config/.env
+# config/.env 파일을 열어 GOOGLE_API_KEY 등을 입력하세요.
 ```
 
-자세한 설치 가이드는 [SETUP.md](docs/SETUP.md)를 참조하세요.
+### 3\. 데이터베이스 실행 및 데이터 주입
+
+```bash
+# 1. ElasticSearch 실행
+docker-compose -f docker/docker-compose.yml up -d elasticsearch
+
+# 2. 데이터 다운로드 및 전처리
+python -m data.scripts.download_data
+
+# 3. 데이터 인덱싱 (가상 메타데이터 주입 포함)
+python -m data.scripts.index_to_elastic
+```
+
+### 4\. 서비스 실행
+
+두 개의 터미널에서 각각 실행합니다.
+
+**Terminal 1 (Backend API):**
+
+```bash
+uvicorn src.api.main:app --reload --port 8000
+```
+
+**Terminal 2 (Frontend UI):**
+
+```bash
+streamlit run src/ui/app.py
+```
+
+브라우저에서 `http://localhost:8501` 접속 후 여행 계획을 요청해 보세요\!
+
+-----
+
+## 📊 데이터셋 처리
+
+본 프로젝트는 **TripAdvisor Review Dataset**을 사용합니다.
+
+  - **출처**: [HuggingFace - jniimi/tripadvisor-review-rating](https://huggingface.co/datasets/jniimi/tripadvisor-review-rating)
+  - **문제점**: 원본 데이터셋에는 호텔의 실제 이름과 위치 정보가 익명화되어 있습니다.
+  - **해결책 (Synthetic Metadata)**: RAG 시스템의 동작을 시연하기 위해, 인덱싱 과정에서 각 호텔 ID에 **유명 도시(Paris, Seoul, Bangkok 등)와 가상의 호텔 이름을 랜덤하게 매핑**하여 주입했습니다. 이를 통해 사용자는 실제 도시 이름으로 검색하고 결과를 확인할 수 있습니다.
+
+-----
 
 ## 📁 프로젝트 구조
 
 ```
 AgenticTravelRAG/
-├── src/                      # 소스 코드
-│   ├── agents/              # LangGraph 에이전트
-│   ├── tools/               # 외부 API 도구
-│   ├── rag/                 # RAG 파이프라인
-│   └── core/                # 핵심 로직
-├── data/                    # 데이터 관련
-│   ├── raw/                # 원본 데이터
-│   ├── processed/          # 전처리된 데이터
-│   └── scripts/            # ETL 스크립트
-├── config/                  # 설정 파일
-├── tests/                   # 테스트 코드
-├── docs/                    # 문서
-└── docker/                  # Docker 설정
+├── src/
+│   ├── agents/          # LangGraph 개별 에이전트 (Parser, RAG, Weather 등)
+│   ├── core/            # 상태 관리(State) 및 워크플로우(Workflow) 정의
+│   ├── rag/             # ElasticSearch 연결 및 하이브리드 검색 로직
+│   ├── api/             # FastAPI 백엔드 서버
+│   └── ui/              # Streamlit 프론트엔드
+├── data/
+│   ├── scripts/         # 데이터 다운로드 및 인덱싱 스크립트
+│   └── raw/             # 원본 데이터 저장소
+├── config/              # 환경 변수 및 설정 파일
+├── tests/               # 단위 및 통합 테스트
+└── docker/              # Docker 설정 파일
 ```
-
-## 📊 데이터셋
-
-- **TripAdvisor Review Dataset**: [HuggingFace](https://huggingface.co/datasets/jniimi/tripadvisor-review-rating)
-- 약 20,000+ 리뷰
-- 평점, 리뷰 텍스트, 메타데이터 포함
-
-## 🔧 기술 스택
-
-- **Orchestration**: LangGraph
-- **Search Engine**: ElasticSearch 8.x
-- **Embedding**: Sentence-Transformers
-- **LLM**: OpenAI GPT-4 / Anthropic Claude
-- **APIs**: Open-Meteo, SerpApi
-- **Framework**: FastAPI
-- **Frontend**: Streamlit
-
-## 👥 기여 가이드
-
-[CONTRIBUTING.md](CONTRIBUTING.md)를 참조하여 프로젝트에 기여해주세요.
-
-### 브랜치 전략
-- `main`: 프로덕션 배포
-- `develop`: 개발 통합
-- `feature/*`: 기능 개발
-- `hotfix/*`: 긴급 수정
-
-## 📝 라이센스
-
-MIT License - 자세한 내용은 [LICENSE](LICENSE) 참조
-
-## 🙏 감사의 말
-
-- TripAdvisor 데이터셋 제공: jniimi
-- LangGraph 팀
-- ElasticSearch 커뮤니티
-
----
-
-**A.R.T - 당신의 완벽한 여행을 위한 AI 파트너** 🌟
