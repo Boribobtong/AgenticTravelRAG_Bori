@@ -216,23 +216,34 @@ async def demo_weather_agent(args):
             {"location": args.location, "days": args.days, "desc": f"사용자 지정: {args.location}, {args.days}일"}
         ]
 
-    for scenario in scenarios:
+    # tqdm 라이브러리 시도
+    try:
+        from tqdm import tqdm
+        iterator = tqdm(scenarios, desc="전체 시나리오 진행")
+    except ImportError:
+        iterator = scenarios
+        print("ℹ️ tqdm 라이브러리가 없어 일반 진행 표시를 사용합니다.")
+
+    for scenario in iterator:
         location = scenario["location"]
         days = scenario["days"]
         desc = scenario["desc"]
+        
+        # tqdm 사용 시 print 대신 tqdm.write 사용 권장
+        printer = tqdm.write if 'tqdm' in locals() else print
 
-        print(f"\n{'='*60}")
-        print(f"🧪 테스트 시나리오: {desc}")
-        print(f"{'='*60}")
+        printer(f"\n{'='*60}")
+        printer(f"🧪 테스트 시나리오: {desc}")
+        printer(f"{'='*60}")
 
         start_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
         end_date = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
         dates = [start_date, end_date]
         
-        print(f"\n📍 위치: {location}")
-        print(f"📅 날짜: {dates}")
+        printer(f"\n📍 위치: {location}")
+        printer(f"📅 날짜: {dates}")
         
-        print("\n🔄 날씨 정보 조회 및 분석 중...")
+        printer("\n🔄 날씨 정보 조회 및 분석 중...")
         
         try:
             # 실행 시간 측정
@@ -246,29 +257,29 @@ async def demo_weather_agent(args):
             
             if not results:
                 logger.warning("결과가 비어있습니다")
-                print("❌ 날씨 정보를 가져오지 못했습니다.")
+                printer("❌ 날씨 정보를 가져오지 못했습니다.")
                 continue
 
-            print(f"\n✅ 총 {len(results)}일치 예보 수신 완료! (소요시간: {elapsed:.2f}초)")
+            printer(f"\n✅ 총 {len(results)}일치 예보 수신 완료! (소요시간: {elapsed:.2f}초)")
             
             for forecast in results:
-                print("-" * 50)
-                print(f"📅 날짜: {forecast.date}")
-                print(f"🌡️ 기온: {forecast.temperature_min}°C ~ {forecast.temperature_max}°C")
-                print(f"🌧️ 강수량: {forecast.precipitation}mm")
-                print(f"📝 날씨: {forecast.description}")
-                print(f"🤖 [LLM 조언]:\n{forecast.advice}")
+                printer("-" * 50)
+                printer(f"📅 날짜: {forecast.date}")
+                printer(f"🌡️ 기온: {forecast.temperature_min}°C ~ {forecast.temperature_max}°C")
+                printer(f"🌧️ 강수량: {forecast.precipitation}mm")
+                printer(f"📝 날씨: {forecast.description}")
+                printer(f"🤖 [LLM 조언]:\n{forecast.advice}")
                 
                 # 데이터 검증 수행
                 errors = validate_forecast(forecast)
                 if errors:
-                    print(f"⚠️ [검증 실패]:")
+                    printer(f"⚠️ [검증 실패]:")
                     for error in errors:
-                        print(f"   - {error}")
+                        printer(f"   - {error}")
                 else:
-                    print("✅ [검증 통과]")
+                    printer("✅ [검증 통과]")
                 
-                print("-" * 50)
+                printer("-" * 50)
             
             # 결과 저장
             if args.save:
