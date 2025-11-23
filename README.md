@@ -200,11 +200,11 @@ python -m pytest tests/integration/test_workflow.py -v
 ```
 
 #### 3. **Examples** (`examples/`)
-- Weather Agent 사용 예제 및 데모
-- pytest 없이 직접 실행 가능
+- Weather Agent의 다양한 기능을 체험해볼 수 있는 데모입니다.
+- 자세한 사용법과 옵션은 [examples/README.md](examples/README.md)를 참고하세요.
 
 ```bash
-# Weather Agent 데모 (실제 API 호출)
+# 기본 실행
 python examples/weather_agent_demo.py
 ```
 
@@ -220,7 +220,7 @@ python -m pytest tests/unit/test_agents.py -k weather -v
 python -m pytest tests/integration/test_weather_integration.py::test_weather_agent_real_api -v -s
 ```
 
-**데모 실행 (상세 로그 확인):**
+**데모 실행 (상세 옵션은 examples/README.md 참고):**
 ```bash
 python examples/weather_agent_demo.py
 ```
