@@ -57,6 +57,35 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def validate_forecast(forecast):
+    """예보 데이터의 무결성 검증"""
+    errors = []
+    
+    # 필수 필드 확인
+    if not forecast.date:
+        errors.append("날짜가 비어있음")
+    
+    # 기온 범위 검증 (-50°C ~ 60°C)
+    if not (-50 <= forecast.temperature_min <= 60):
+        errors.append(f"비정상 최저기온: {forecast.temperature_min}°C")
+    
+    if not (-50 <= forecast.temperature_max <= 60):
+        errors.append(f"비정상 최고기온: {forecast.temperature_max}°C")
+    
+    # 논리적 검증
+    if forecast.temperature_max < forecast.temperature_min:
+        errors.append(f"최고기온({forecast.temperature_max}) < 최저기온({forecast.temperature_min})")
+    
+    # LLM 조언 생성 확인
+    if not forecast.advice or len(forecast.advice) < 10:
+        errors.append("LLM 조언이 충분하지 않음")
+    
+    # 강수량 음수 확인
+    if forecast.precipitation < 0:
+        errors.append(f"음수 강수량: {forecast.precipitation}mm")
+    
+    return errors
+
 async def demo_weather_agent(args):
     print("🌤️ Weather Agent Demo 시작...")
     print("=" * 50)
@@ -117,6 +146,16 @@ async def demo_weather_agent(args):
                 print(f"🌧️ 강수량: {forecast.precipitation}mm")
                 print(f"📝 날씨: {forecast.description}")
                 print(f"🤖 [LLM 조언]:\n{forecast.advice}")
+                
+                # 데이터 검증 수행
+                errors = validate_forecast(forecast)
+                if errors:
+                    print(f"⚠️ [검증 실패]:")
+                    for error in errors:
+                        print(f"   - {error}")
+                else:
+                    print("✅ [검증 통과]")
+                
                 print("-" * 50)
                 
         except Exception as e:
