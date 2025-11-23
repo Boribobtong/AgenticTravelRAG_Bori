@@ -195,6 +195,91 @@ def parse_arguments():
     )
     return parser.parse_args()
 
+async def process_scenario(agent, scenario, args, printer, semaphore):
+    """단일 시나리오 처리 함수 (세마포어 적용)"""
+    async with semaphore:
+        location = scenario["location"]
+        days = scenario["days"]
+        desc = scenario["desc"]
+        
+        printer(f"\n{'='*60}")
+        printer(f"🧪 테스트 시나리오: {desc}")
+        printer(f"{'='*60}")
+
+        start_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        end_date = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
+        dates = [start_date, end_date]
+        
+        printer(f"\n📍 위치: {location}")
+        printer(f"📅 날짜: {dates}")
+        
+        printer("\n🔄 날씨 정보 조회 및 분석 중...")
+        
+        start_time = time.time()
+        result_summary = {
+            "location": location,
+            "status": "FAIL",
+            "elapsed": 0.0,
+            "validation": "FAIL",
+            "error": None
+        }
+
+        try:
+            logger.info(f"날씨 조회 시작: {location}, {dates}")
+            
+            # API 호출 (Rate Limit 고려하여 약간의 딜레이 추가 가능)
+            results = await agent.get_forecast(location, dates)
+            
+            elapsed = time.time() - start_time
+            result_summary["elapsed"] = elapsed
+            logger.info(f"API 호출 완료: {elapsed:.2f}초")
+            
+            if not results:
+                logger.warning("결과가 비어있습니다")
+                printer("❌ 날씨 정보를 가져오지 못했습니다.")
+                result_summary["error"] = "Empty Result"
+                return result_summary
+
+            printer(f"\n✅ 총 {len(results)}일치 예보 수신 완료! (소요시간: {elapsed:.2f}초)")
+            
+            all_valid = True
+            for forecast in results:
+                printer("-" * 50)
+                printer(f"📅 날짜: {forecast.date}")
+                printer(f"🌡️ 기온: {forecast.temperature_min}°C ~ {forecast.temperature_max}°C")
+                printer(f"🌧️ 강수량: {forecast.precipitation}mm")
+                printer(f"📝 날씨: {forecast.description}")
+                printer(f"🤖 [LLM 조언]:\n{forecast.advice}")
+                
+                # 데이터 검증 수행
+                errors = validate_forecast(forecast)
+                if errors:
+                    all_valid = False
+                    printer(f"⚠️ [검증 실패]:")
+                    for error in errors:
+                        printer(f"   - {error}")
+                else:
+                    printer("✅ [검증 통과]")
+                
+                printer("-" * 50)
+            
+            result_summary["status"] = "SUCCESS"
+            result_summary["validation"] = "PASS" if all_valid else "WARN"
+
+            # 결과 저장
+            if args.save:
+                save_results(location, results)
+                
+        except Exception as e:
+            logger.error(f"예상치 못한 오류 발생: {type(e).__name__}")
+            logger.error(f"상세: {str(e)}")
+            printer(f"❌ 에러 발생: {str(e)}")
+            result_summary["error"] = str(e)
+            
+        return result_summary
+
+# ... (print_summary_report 함수 유지)
+
 async def demo_weather_agent(args):
     print("🌤️ Weather Agent Demo 시작...")
     print("=" * 50)
@@ -210,6 +295,7 @@ async def demo_weather_agent(args):
         return
 
     # 시나리오 결정
+    scenarios = []
     if args.all_scenarios:
         scenarios = [
             {"location": "Paris", "days": 3, "desc": "유럽 도시, 짧은 기간 (3일)"},
@@ -230,84 +316,24 @@ async def demo_weather_agent(args):
             {"location": args.location, "days": args.days, "desc": f"사용자 지정: {args.location}, {args.days}일"}
         ]
 
-    # tqdm 라이브러리 시도
+    # tqdm 라이브러리 설정
     try:
         from tqdm import tqdm
-        iterator = tqdm(scenarios, desc="전체 시나리오 진행")
+        printer = tqdm.write
     except ImportError:
-        iterator = scenarios
-        print("ℹ️ tqdm 라이브러리가 없어 일반 진행 표시를 사용합니다.")
+        printer = print
 
-    for scenario in iterator:
-        location = scenario["location"]
-        days = scenario["days"]
-        desc = scenario["desc"]
-        
-        # tqdm 사용 시 print 대신 tqdm.write 사용 권장
-        printer = tqdm.write if 'tqdm' in locals() else print
-
-        printer(f"\n{'='*60}")
-        printer(f"🧪 테스트 시나리오: {desc}")
-        printer(f"{'='*60}")
-
-        start_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
-        end_date = (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d")
-        dates = [start_date, end_date]
-        
-        printer(f"\n📍 위치: {location}")
-        printer(f"📅 날짜: {dates}")
-        
-        printer("\n🔄 날씨 정보 조회 및 분석 중...")
-        
-        try:
-            # 실행 시간 측정
-            start_time = time.time()
-            logger.info(f"날씨 조회 시작: {location}, {dates}")
-            
-            results = await agent.get_forecast(location, dates)
-            
-            elapsed = time.time() - start_time
-            logger.info(f"API 호출 완료: {elapsed:.2f}초")
-            
-            if not results:
-                logger.warning("결과가 비어있습니다")
-                printer("❌ 날씨 정보를 가져오지 못했습니다.")
-                continue
-
-            printer(f"\n✅ 총 {len(results)}일치 예보 수신 완료! (소요시간: {elapsed:.2f}초)")
-            
-            for forecast in results:
-                printer("-" * 50)
-                printer(f"📅 날짜: {forecast.date}")
-                printer(f"🌡️ 기온: {forecast.temperature_min}°C ~ {forecast.temperature_max}°C")
-                printer(f"🌧️ 강수량: {forecast.precipitation}mm")
-                printer(f"📝 날씨: {forecast.description}")
-                printer(f"🤖 [LLM 조언]:\n{forecast.advice}")
-                
-                # 데이터 검증 수행
-                errors = validate_forecast(forecast)
-                if errors:
-                    printer(f"⚠️ [검증 실패]:")
-                    for error in errors:
-                        printer(f"   - {error}")
-                else:
-                    printer("✅ [검증 통과]")
-                
-                printer("-" * 50)
-            
-            # 결과 저장
-            if args.save:
-                save_results(location, results)
-                
-        except Exception as e:
-            logger.error(f"예상치 못한 오류 발생: {type(e).__name__}")
-            logger.error(f"상세: {str(e)}")
-            traceback.print_exc()
-            continue
-        
-        # API 호출 간 잠시 대기 (Rate Limit 방지)
-        if len(scenarios) > 1:
-            await asyncio.sleep(1)
+    print(f"\n🚀 총 {len(scenarios)}개 시나리오 병렬 실행 시작...")
+    
+    # 세마포어 생성 (동시 실행 수 제한: 3)
+    semaphore = asyncio.Semaphore(3)
+    
+    # 병렬 실행
+    tasks = [process_scenario(agent, scenario, args, printer, semaphore) for scenario in scenarios]
+    results = await asyncio.gather(*tasks)
+    
+    # 요약 리포트 출력
+    print_summary_report(results)
 
 if __name__ == "__main__":
     args = parse_arguments()
