@@ -1,3 +1,13 @@
+"""
+Weather Agent Demo: Weather Agent 사용 예제
+
+실제 Open-Meteo API와 Google Gemini API를 호출하여
+Weather Agent의 동작을 시연합니다.
+
+사용법:
+    python examples/weather_agent_demo.py
+"""
+
 import asyncio
 import os
 import sys
@@ -12,8 +22,9 @@ from dotenv import load_dotenv
 # 환경 변수 로드 (API 키 등)
 load_dotenv(os.path.join(os.path.dirname(__file__), '../config/.env'))
 
-async def test_weather_agent():
-    print("🌤️ Weather Agent 테스트 시작...")
+async def demo_weather_agent():
+    print("🌤️ Weather Agent Demo 시작...")
+    print("=" * 50)
     
     agent = WeatherToolAgent()
     
@@ -45,4 +56,4 @@ async def test_weather_agent():
         print("-" * 50)
 
 if __name__ == "__main__":
-    asyncio.run(test_weather_agent())
+    asyncio.run(demo_weather_agent())

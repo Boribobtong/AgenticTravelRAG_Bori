@@ -269,7 +269,8 @@ class ARTWorkflow:
                 'state': final_state, # 다음 턴을 위해 필수
                 'itinerary': final_state.get('final_itinerary'),
                 'hotels': final_state.get('hotel_options'),
-                'weather': final_state.get('weather_forecast')
+                'weather': final_state.get('weather_forecast'),
+                'execution_path': final_state.get('execution_path', [])  # 테스트용 실행 경로
             }
         except Exception as e:
             logger.error(f"워크플로우 실행 실패: {str(e)}")
