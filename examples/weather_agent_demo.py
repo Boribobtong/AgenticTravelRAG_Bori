@@ -9,11 +9,15 @@ Weather Agent의 동작을 시연합니다.
 """
 
 import argparse
-
 import asyncio
 import os
 import sys
+import json
+import logging
+import traceback
+import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # 프로젝트 루트 경로 추가
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -24,38 +28,52 @@ from dotenv import load_dotenv
 # 환경 변수 로드 (API 키 등)
 load_dotenv(os.path.join(os.path.dirname(__file__), '../config/.env'))
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(
-        description='Weather Agent Demo - 실제 API 호출 테스트'
-    )
-    parser.add_argument(
-        '--location', 
-        default='Paris', 
-        help='조회할 도시 이름 (예: Paris, Tokyo, Seoul)'
-    )
-    parser.add_argument(
-        '--days', 
-        type=int, 
-        default=3, 
-        help='예보 일수 (1-14)'
-    )
-    parser.add_argument(
-        '--all-scenarios', 
-        action='store_true',
-        help='모든 시나리오 실행'
-    )
-    return parser.parse_args()
-
-import logging
-import traceback
-import time
-
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s [%(levelname)s] %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+def save_results(location, results, output_dir="examples/demo_results"):
+    """결과를 JSON 파일로 저장"""
+    Path(output_dir).mkdir(exist_ok=True)
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{output_dir}/weather_{location}_{timestamp}.json"
+    
+    output = {
+        "metadata": {
+            "location": location,
+            "query_time": datetime.now().isoformat(),
+            "forecast_count": len(results)
+        },
+        "forecasts": [
+            {
+                "date": f.date,
+                "temperature": {
+                    "min": f.temperature_min,
+                    "max": f.temperature_max,
+                    "unit": "celsius"
+                },
+                "precipitation": {
+                    "amount": f.precipitation,
+                    "unit": "mm"
+                },
+                "weather_code": f.weather_code,
+                "description": f.description,
+                "llm_advice": f.advice,
+                "recommendations": f.recommendations
+            }
+            for f in results
+        ]
+    }
+    
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+    
+    print(f"💾 결과 저장: {filename}")
+    return filename
 
 def validate_forecast(forecast):
     """예보 데이터의 무결성 검증"""
@@ -85,6 +103,33 @@ def validate_forecast(forecast):
         errors.append(f"음수 강수량: {forecast.precipitation}mm")
     
     return errors
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description='Weather Agent Demo - 실제 API 호출 테스트'
+    )
+    parser.add_argument(
+        '--location', 
+        default='Paris', 
+        help='조회할 도시 이름 (예: Paris, Tokyo, Seoul)'
+    )
+    parser.add_argument(
+        '--days', 
+        type=int, 
+        default=3, 
+        help='예보 일수 (1-14)'
+    )
+    parser.add_argument(
+        '--all-scenarios', 
+        action='store_true',
+        help='모든 시나리오 실행'
+    )
+    parser.add_argument(
+        '--save', 
+        action='store_true',
+        help='결과를 JSON 파일로 저장'
+    )
+    return parser.parse_args()
 
 async def demo_weather_agent(args):
     print("🌤️ Weather Agent Demo 시작...")
@@ -157,6 +202,10 @@ async def demo_weather_agent(args):
                     print("✅ [검증 통과]")
                 
                 print("-" * 50)
+            
+            # 결과 저장
+            if args.save:
+                save_results(location, results)
                 
         except Exception as e:
             logger.error(f"예상치 못한 오류 발생: {type(e).__name__}")
