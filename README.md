@@ -241,9 +241,6 @@ AgenticTravelRAG/
 │   ├── scripts/         # 데이터 다운로드 및 인덱싱 스크립트
 │   └── raw/             # 원본 데이터 저장소
 ├── config/              # 환경 변수 및 설정 파일
-├── tests/
-│   ├── unit/            # Mock 기반 단위 테스트
-│   └── integration/     # 실제 API 호출 통합 테스트
-├── examples/            # Weather Agent 사용 예제 및 데모
+├── tests/               # 단위 및 통합 테스트
 └── docker/              # Docker 설정 파일
 ```
