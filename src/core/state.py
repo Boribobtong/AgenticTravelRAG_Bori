@@ -56,6 +56,7 @@ class WeatherForecast(BaseModel):
     precipitation: float
     weather_code: int
     description: str
+    advice: str = Field(default="", description="LLM이 생성한 날씨 기반 여행 조언")
     recommendations: List[str] = Field(default_factory=list, description="날씨 기반 활동 추천")
 
 
