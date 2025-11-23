@@ -46,6 +46,17 @@ def parse_arguments():
     )
     return parser.parse_args()
 
+import logging
+import traceback
+import time
+
+# 로깅 설정
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(message)s'
+)
+logger = logging.getLogger(__name__)
+
 async def demo_weather_agent(args):
     print("🌤️ Weather Agent Demo 시작...")
     print("=" * 50)
@@ -65,7 +76,6 @@ async def demo_weather_agent(args):
         ]
 
     for scenario in scenarios:
-        # ... (기존 반복문 내용)
         location = scenario["location"]
         days = scenario["days"]
         desc = scenario["desc"]
@@ -82,22 +92,38 @@ async def demo_weather_agent(args):
         print(f"📅 날짜: {dates}")
         
         print("\n🔄 날씨 정보 조회 및 분석 중...")
-        results = await agent.get_forecast(location, dates)
         
-        if not results:
-            print("❌ 날씨 정보를 가져오지 못했습니다.")
-            continue
+        try:
+            # 실행 시간 측정
+            start_time = time.time()
+            logger.info(f"날씨 조회 시작: {location}, {dates}")
+            
+            results = await agent.get_forecast(location, dates)
+            
+            elapsed = time.time() - start_time
+            logger.info(f"API 호출 완료: {elapsed:.2f}초")
+            
+            if not results:
+                logger.warning("결과가 비어있습니다")
+                print("❌ 날씨 정보를 가져오지 못했습니다.")
+                continue
 
-        print(f"\n✅ 총 {len(results)}일치 예보 수신 완료!")
-        
-        for forecast in results:
-            print("-" * 50)
-            print(f"📅 날짜: {forecast.date}")
-            print(f"🌡️ 기온: {forecast.temperature_min}°C ~ {forecast.temperature_max}°C")
-            print(f"🌧️ 강수량: {forecast.precipitation}mm")
-            print(f"📝 날씨: {forecast.description}")
-            print(f"🤖 [LLM 조언]:\n{forecast.advice}")
-            print("-" * 50)
+            print(f"\n✅ 총 {len(results)}일치 예보 수신 완료! (소요시간: {elapsed:.2f}초)")
+            
+            for forecast in results:
+                print("-" * 50)
+                print(f"📅 날짜: {forecast.date}")
+                print(f"🌡️ 기온: {forecast.temperature_min}°C ~ {forecast.temperature_max}°C")
+                print(f"🌧️ 강수량: {forecast.precipitation}mm")
+                print(f"📝 날씨: {forecast.description}")
+                print(f"🤖 [LLM 조언]:\n{forecast.advice}")
+                print("-" * 50)
+                
+        except Exception as e:
+            logger.error(f"예상치 못한 오류 발생: {type(e).__name__}")
+            logger.error(f"상세: {str(e)}")
+            traceback.print_exc()
+            continue
         
         # API 호출 간 잠시 대기 (Rate Limit 방지)
         if len(scenarios) > 1:
