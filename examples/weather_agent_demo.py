@@ -188,6 +188,11 @@ def parse_arguments():
         action='store_true',
         help='Mock 데이터와 실제 결과 비교'
     )
+    parser.add_argument(
+        '--korea-cities', 
+        action='store_true',
+        help='한국 10대 도시 테스트 실행'
+    )
     return parser.parse_args()
 
 async def demo_weather_agent(args):
@@ -210,6 +215,15 @@ async def demo_weather_agent(args):
             {"location": "Paris", "days": 3, "desc": "유럽 도시, 짧은 기간 (3일)"},
             {"location": "Tokyo", "days": 5, "desc": "아시아 도시, 중간 기간 (5일)"},
             {"location": "New York", "days": 1, "desc": "미국 도시, 하루 (1일)"},
+        ]
+    elif args.korea_cities:
+        korea_cities = [
+            "Seoul", "Busan", "Incheon", "Daegu", "Daejeon", 
+            "Gwangju", "Ulsan", "Suwon", "Changwon", "Jeju"
+        ]
+        scenarios = [
+            {"location": city, "days": 3, "desc": f"한국 주요 도시: {city} (3일)"}
+            for city in korea_cities
         ]
     else:
         scenarios = [
