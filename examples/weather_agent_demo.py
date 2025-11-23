@@ -8,6 +8,8 @@ Weather Agent의 동작을 시연합니다.
     python examples/weather_agent_demo.py
 """
 
+import argparse
+
 import asyncio
 import os
 import sys
@@ -22,20 +24,48 @@ from dotenv import load_dotenv
 # 환경 변수 로드 (API 키 등)
 load_dotenv(os.path.join(os.path.dirname(__file__), '../config/.env'))
 
-async def demo_weather_agent():
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description='Weather Agent Demo - 실제 API 호출 테스트'
+    )
+    parser.add_argument(
+        '--location', 
+        default='Paris', 
+        help='조회할 도시 이름 (예: Paris, Tokyo, Seoul)'
+    )
+    parser.add_argument(
+        '--days', 
+        type=int, 
+        default=3, 
+        help='예보 일수 (1-14)'
+    )
+    parser.add_argument(
+        '--all-scenarios', 
+        action='store_true',
+        help='모든 시나리오 실행'
+    )
+    return parser.parse_args()
+
+async def demo_weather_agent(args):
     print("🌤️ Weather Agent Demo 시작...")
     print("=" * 50)
     
     agent = WeatherToolAgent()
     
-    # 다양한 테스트 시나리오 정의
-    scenarios = [
-        {"location": "Paris", "days": 3, "desc": "유럽 도시, 짧은 기간 (3일)"},
-        {"location": "Tokyo", "days": 5, "desc": "아시아 도시, 중간 기간 (5일)"},
-        {"location": "New York", "days": 1, "desc": "미국 도시, 하루 (1일)"},
-    ]
+    # 시나리오 결정
+    if args.all_scenarios:
+        scenarios = [
+            {"location": "Paris", "days": 3, "desc": "유럽 도시, 짧은 기간 (3일)"},
+            {"location": "Tokyo", "days": 5, "desc": "아시아 도시, 중간 기간 (5일)"},
+            {"location": "New York", "days": 1, "desc": "미국 도시, 하루 (1일)"},
+        ]
+    else:
+        scenarios = [
+            {"location": args.location, "days": args.days, "desc": f"사용자 지정: {args.location}, {args.days}일"}
+        ]
 
     for scenario in scenarios:
+        # ... (기존 반복문 내용)
         location = scenario["location"]
         days = scenario["days"]
         desc = scenario["desc"]
@@ -70,7 +100,9 @@ async def demo_weather_agent():
             print("-" * 50)
         
         # API 호출 간 잠시 대기 (Rate Limit 방지)
-        await asyncio.sleep(1)
+        if len(scenarios) > 1:
+            await asyncio.sleep(1)
 
 if __name__ == "__main__":
-    asyncio.run(demo_weather_agent())
+    args = parse_arguments()
+    asyncio.run(demo_weather_agent(args))
