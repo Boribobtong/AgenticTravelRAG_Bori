@@ -104,6 +104,60 @@ def validate_forecast(forecast):
     
     return errors
 
+from src.core.state import WeatherForecast
+
+def generate_mock_weather(location, dates):
+    """테스트용 Mock 날씨 데이터 생성"""
+    mock_forecasts = []
+    start = datetime.strptime(dates[0], "%Y-%m-%d")
+    end = datetime.strptime(dates[1], "%Y-%m-%d")
+    delta = (end - start).days + 1
+    
+    for i in range(delta):
+        current_date = (start + timedelta(days=i)).strftime("%Y-%m-%d")
+        mock_forecasts.append(WeatherForecast(
+            date=current_date,
+            temperature_min=10.0,
+            temperature_max=20.0,
+            precipitation=0.0,
+            weather_code=0,
+            description="Mock Clear Sky",
+            recommendations=["Mock Recommendation"],
+            advice="This is a mock advice for testing purposes."
+        ))
+    return mock_forecasts
+
+async def compare_mock_vs_real(agent, location, dates):
+    """Mock 데이터와 실제 API 결과 비교"""
+    print("\n📊 Mock vs Real 비교 모드")
+    print("="*60)
+    
+    # Mock 데이터 생성 (빠른 검증)
+    mock_results = generate_mock_weather(location, dates)
+    print(f"Mock 결과: {len(mock_results)}일 생성됨")
+    
+    # 실제 API 호출
+    print("실제 API 호출 중...")
+    real_results = await agent.get_forecast(location, dates)
+    print(f"Real 결과: {len(real_results)}일 수신됨")
+    
+    # 구조 비교
+    if len(mock_results) == len(real_results):
+        print("✅ 결과 개수 일치")
+    else:
+        print(f"⚠️ 결과 개수 불일치: Mock({len(mock_results)}) vs Real({len(real_results)})")
+    
+    # 필드 존재 여부 비교
+    for i, (mock, real) in enumerate(zip(mock_results, real_results)):
+        print(f"\n날짜 {real.date}:")
+        print(f"  Mock advice 길이: {len(mock.advice)}")
+        print(f"  Real advice 길이: {len(real.advice)}")
+        
+        if len(real.advice) > 0:
+             print("  ✅ Real advice 생성 성공")
+        else:
+             print("  ❌ Real advice 생성 실패")
+
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description='Weather Agent Demo - 실제 API 호출 테스트'
@@ -129,6 +183,11 @@ def parse_arguments():
         action='store_true',
         help='결과를 JSON 파일로 저장'
     )
+    parser.add_argument(
+        '--compare', 
+        action='store_true',
+        help='Mock 데이터와 실제 결과 비교'
+    )
     return parser.parse_args()
 
 async def demo_weather_agent(args):
@@ -137,6 +196,14 @@ async def demo_weather_agent(args):
     
     agent = WeatherToolAgent()
     
+    # 비교 모드 실행
+    if args.compare:
+        start_date = (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d")
+        end_date = (datetime.now() + timedelta(days=args.days)).strftime("%Y-%m-%d")
+        dates = [start_date, end_date]
+        await compare_mock_vs_real(agent, args.location, dates)
+        return
+
     # 시나리오 결정
     if args.all_scenarios:
         scenarios = [
