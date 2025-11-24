@@ -99,9 +99,14 @@ class ARTWorkflow:
                 # [수정] state 전체를 넘겨주어 컨텍스트를 인식하게 함
                 parsed_info = await self.query_parser.parse(state['user_query'], state)
                 
+                logger.info(f"[QueryParser] 파싱 결과: {parsed_info}")
+                
                 updates = {}
                 if parsed_info.get('destination'):
                     updates['destination'] = parsed_info['destination']
+                    logger.info(f"[QueryParser] 목적지 업데이트: {parsed_info['destination']}")
+                else:
+                    logger.warning(f"[QueryParser] 목적지 정보 없음. 파싱 결과: {parsed_info}")
                 
                 if parsed_info.get('dates'):
                     updates['travel_dates'] = parsed_info['dates']
@@ -148,17 +153,44 @@ class ARTWorkflow:
         return state
     
     async def weather_tool_node(self, state: AppState) -> AppState:
-        """날씨 조회"""
+        """[수정] 날씨 조회 (목적지와 날짜가 변경되었을 때만 재실행)"""
         state = self.state_manager.log_execution_path(state, "weather_tool")
+        
+        # 목적지나 날짜 정보가 없으면 스킵
         if not state.get('destination') or not state.get('travel_dates'):
+            logger.info("[Weather] 목적지 또는 날짜 정보 없음 - 스킵")
             return state
+        
+        # 이미 같은 목적지/날짜로 날씨를 조회했으면 스킵
+        existing_forecast = state.get('weather_forecast', [])
+        if existing_forecast:
+            # 컨텍스트 메모리에서 이전 조회 정보 확인
+            prev_dest = state.get('context_memory', {}).get('weather_destination')
+            prev_dates = state.get('context_memory', {}).get('weather_dates')
+            
+            if prev_dest == state['destination'] and prev_dates == state['travel_dates']:
+                logger.info(f"[Weather] 이미 조회됨 ({state['destination']}) - 스킵")
+                return state
             
         try:
+            logger.info(f"[Weather] 날씨 조회: {state['destination']}, {state['travel_dates']}")
             weather_data = await self.weather_tool.get_forecast(
                 location=state['destination'],
                 dates=state['travel_dates']
             )
-            state = self.state_manager.update_state(state, {'weather_forecast': weather_data})
+            
+            # 날씨 정보와 함께 조회 이력 저장
+            updates = {
+                'weather_forecast': weather_data,
+                'context_memory': {
+                    **state.get('context_memory', {}),
+                    'weather_destination': state['destination'],
+                    'weather_dates': state['travel_dates']
+                }
+            }
+            state = self.state_manager.update_state(state, updates)
+            logger.info(f"[Weather] 조회 완료: {len(weather_data)}개 예보")
+            
         except Exception as e:
             logger.error(f"[Weather] 실패: {str(e)}")
         
@@ -211,7 +243,22 @@ class ARTWorkflow:
         """피드백 처리 (수동 개입이 필요한 경우만)"""
         logger.info("[FeedbackHandler] 처리")
         state = self.state_manager.log_execution_path(state, "feedback_handler")
-        # 여기서는 특별한 로직 없이 라우팅을 위한 상태만 설정
+        
+        # [수정] 목적지 정보가 없는 경우 안내 메시지 생성
+        if not state.get('destination'):
+            feedback_message = (
+                "목적지를 알려주시면 여행 계획을 도와드리겠습니다! 😊\n\n"
+            )
+            state = self.state_manager.update_state(state, {
+                'final_itinerary': {
+                    'summary': feedback_message,
+                    'type': 'feedback'
+                },
+                'conversation_state': ConversationState.COMPLETED
+            })
+            return state
+        
+        # 기타 피드백 처리
         state['context_memory']['retry_type'] = 'complete'
         return state
     
