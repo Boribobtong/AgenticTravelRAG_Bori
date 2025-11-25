@@ -152,7 +152,8 @@ with st.sidebar:
             st.session_state.current_plan = None
             if 'input_query' in st.session_state:
                 del st.session_state.input_query
-            st.rerun()
+            #[수정] streamlit return 오류 발생해서 수정
+            st.experimental_rerun()
     else:
         st.info("새 대화를 시작하세요")
 
@@ -184,6 +185,10 @@ with col1:
     
     # 쿼리 처리
     if submit_button and user_input:
+        # [수정] 예시 질문 상태 초기화
+        if 'input_query' in st.session_state:
+            del st.session_state.input_query
+        
         # 사용자 메시지 추가
         st.session_state.chat_history.append({
             "role": "user",
@@ -223,7 +228,8 @@ with col1:
                             "timestamp": datetime.now().isoformat()
                         })
                         
-                        st.rerun() # 화면 갱신
+                        #[수정] streamlit return 오류 발생해서 수정
+                        st.experimental_rerun() # 화면 갱신
                     else:
                         st.error(f"오류: {result.get('error', '알 수 없는 오류')}")
                 else:

@@ -167,6 +167,66 @@ streamlit run src/ui/app.py
 
 -----
 
+## 🧪 테스트
+
+### 테스트 구조
+
+프로젝트는 **3단계 테스트 전략**을 사용합니다:
+
+#### 1. **Unit Tests** (`tests/unit/`)
+- 외부 API 호출 없이 Mock을 사용한 빠른 테스트
+- 각 에이전트의 로직만 검증
+- CI/CD에서 자동 실행
+
+```bash
+# 전체 unit test 실행
+python -m pytest tests/unit/ -v
+
+# Weather Agent unit test만 실행
+python -m pytest tests/unit/test_agents.py::test_weather_tool_api_parsing -v
+```
+
+#### 2. **Integration Tests** (`tests/integration/`)
+- 실제 API를 호출하는 통합 테스트
+- 느리지만 현실적인 검증
+- 필요할 때만 선택적으로 실행
+
+```bash
+# Weather Agent integration test
+python -m pytest tests/integration/test_weather_integration.py -v -m integration
+
+# 전체 워크플로우 integration test
+python -m pytest tests/integration/test_workflow.py -v
+```
+
+#### 3. **Examples** (`examples/`)
+- Weather Agent의 다양한 기능을 체험해볼 수 있는 데모입니다.
+- 자세한 사용법과 옵션은 [examples/README.md](examples/README.md)를 참고하세요.
+
+```bash
+# 기본 실행
+python examples/weather_agent_demo.py
+```
+
+### Weather Agent 예시
+
+**빠른 검증 (Unit Test):**
+```bash
+python -m pytest tests/unit/test_agents.py -k weather -v
+```
+
+**실제 API 호출 (Integration Test):**
+```bash
+python -m pytest tests/integration/test_weather_integration.py::test_weather_agent_real_api -v -s
+```
+
+**데모 실행 (상세 옵션은 examples/README.md 참고):**
+```bash
+python examples/weather_agent_demo.py
+```
+
+-----
+
 ## 📁 프로젝트 구조
 
 ```
