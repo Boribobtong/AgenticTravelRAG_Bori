@@ -72,7 +72,7 @@ class ElasticSearchRAG:
         self.es = Elasticsearch(
             [{'host': es_host, 'port': es_port, 'scheme': 'http'}],
             basic_auth=(es_user, es_password),  # [핵심 수정] 인증 정보 전달
-            timeout=30,
+            request_timeout=30,
             max_retries=3,
             retry_on_timeout=True
         )
