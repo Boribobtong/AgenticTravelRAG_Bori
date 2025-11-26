@@ -89,3 +89,31 @@ class ResponseGeneratorAgent:
             table += f"| {forecast.date} | {forecast.description} | {forecast.temperature_min}°C | {forecast.temperature_max}°C | {forecast.precipitation}mm |\n"
         
         return table
+
+    async def stream_response(self, state: Dict[str, Any]):
+        """Async generator that yields parts of the response incrementally.
+
+        This is a lightweight PoC for streaming responses without invoking the
+        LLM for every partial update. It yields three steps:
+        1) hotels list
+        2) weather table or message
+        3) final summary (placeholder if LLM not available)
+        """
+        # 1) hotels
+        hotels = [{'name': h.name, 'rating': h.rating, 'price': h.price_range, 'highlights': h.review_highlights} for h in state.get('hotel_options', [])[:3]]
+        yield {'step': 'hotels', 'hotels': hotels}
+
+        # 2) weather
+        weather_info = self._format_weather_forecast(
+            state.get('weather_forecast', []),
+            state.get('context_memory', {}).get('weather_limitation_message')
+        )
+        yield {'step': 'weather', 'weather': weather_info}
+
+        # 3) final summary — try LLM generate, but fall back to a simple placeholder
+        try:
+            final = await self.generate(state)
+            yield {'step': 'final', 'itinerary': final}
+        except Exception:
+            # Non-fatal fallback
+            yield {'step': 'final', 'itinerary': {'summary': '요약을 생성할 수 없습니다. 나중에 다시 시도해 주세요.'}}
