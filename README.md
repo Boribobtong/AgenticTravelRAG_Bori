@@ -139,6 +139,32 @@ python -m data.scripts.index_to_elastic
 
 ### 4\. 서비스 실행
 
+#### 옵션 1: CLI로 Agent 직접 실행 (추천)
+
+터미널에서 바로 Agent와 대화할 수 있습니다.
+
+**대화형 모드:**
+```bash
+python scripts/run_agent.py --interactive
+```
+
+**단일 쿼리 실행:**
+```bash
+python scripts/run_agent.py --query "파리에서 12월에 묵을 낭만적인 호텔 추천해줘"
+```
+
+**세션 ID 지정하여 대화 이어가기:**
+```bash
+python scripts/run_agent.py --interactive --session-id my-session
+```
+
+**도움말 보기:**
+```bash
+python scripts/run_agent.py --help
+```
+
+#### 옵션 2: Web UI 실행
+
 두 개의 터미널에서 각각 실행합니다.
 
 **Terminal 1 (Backend API):**
