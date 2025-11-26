@@ -10,13 +10,35 @@ import json
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
-import numpy as np
+# Optional/heavy dependencies: import lazily/with fallback so tests that only
+# exercise lightweight parts (e.g. adaptive_alpha) don't fail at import time in CI.
+try:
+    import numpy as np
+except Exception:
+    np = None
+
 from dataclasses import dataclass, asdict
 
-from elasticsearch import Elasticsearch, helpers
-from sentence_transformers import SentenceTransformer
-import pandas as pd
-from datasets import load_dataset
+try:
+    from elasticsearch import Elasticsearch, helpers
+except Exception:
+    Elasticsearch = None
+    helpers = None
+
+try:
+    from sentence_transformers import SentenceTransformer
+except Exception:
+    SentenceTransformer = None
+
+try:
+    import pandas as pd
+except Exception:
+    pd = None
+
+try:
+    from datasets import load_dataset
+except Exception:
+    load_dataset = None
 from .re_ranker import simple_rerank
 from .cross_reranker import try_cross_rerank
 
