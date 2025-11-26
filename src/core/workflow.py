@@ -16,6 +16,10 @@ from src.agents.hotel_rag import HotelRAGAgent
 from src.agents.weather_tool import WeatherToolAgent
 from src.agents.google_search import GoogleSearchAgent
 from src.agents.response_generator import ResponseGeneratorAgent
+from src.tools.ab_testing import ABTestingManager
+from src.tools.satisfaction_tracker import SatisfactionTracker
+from src.tools.metrics_collector import get_metrics_collector
+import time
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -35,10 +39,41 @@ class ARTWorkflow:
         self.google_search = GoogleSearchAgent()
         self.response_generator = ResponseGeneratorAgent()
         
+        # Phase 4: A/B Testing
+        self.ab_testing = ABTestingManager()
+        self._init_ab_experiments()
+        
+        # Phase 4: Satisfaction Tracking
+        self.satisfaction_tracker = SatisfactionTracker()
+        self.session_start_times = {}  # 세션별 시작 시간 추적
+        
+        # Phase 4: Metrics Collection
+        self.metrics = get_metrics_collector()
+        
         self.workflow = self._build_workflow()
         self.app = self.workflow.compile()
         
         logger.info("A.R.T Workflow 초기화 완료")
+    
+    def _init_ab_experiments(self):
+        """A/B 테스팅 실험 초기화"""
+        try:
+            # 하이브리드 검색 alpha 값 실험
+            experiment = self.ab_testing.create_experiment(
+                name="hybrid_search_alpha",
+                description="하이브리드 검색의 최적 alpha 값 찾기",
+                variants=[
+                    {"name": "bm25_heavy", "config": {"alpha": 0.3}, "description": "BM25 강화"},
+                    {"name": "balanced", "config": {"alpha": 0.5}, "description": "균형"},
+                    {"name": "vector_heavy", "config": {"alpha": 0.7}, "description": "Vector 강화"}
+                ],
+                traffic_split=[0.33, 0.34, 0.33]
+            )
+            # 실험 시작
+            self.ab_testing.start_experiment("hybrid_search_alpha")
+            logger.info("A/B 테스팅 실험 초기화 완료")
+        except Exception as e:
+            logger.warning(f"A/B 테스팅 실험 초기화 실패 (기존 실험 존재 가능): {e}")
     
     def _build_workflow(self) -> StateGraph:
         workflow = StateGraph(AppState)
@@ -130,24 +165,57 @@ class ARTWorkflow:
         return state
     
     async def hotel_rag_node(self, state: AppState) -> AppState:
-        """호텔 검색"""
+        """호텔 검색 (A/B 테스팅 + 메트릭 수집)"""
         logger.info("[HotelRAG] 검색 시작")
         state = self.state_manager.log_execution_path(state, "hotel_rag")
         
-        try:
-            search_params = {
-                'destination': state.get('destination'),
-                'preferences': state.get('preferences'),
-                'budget': state.get('preferences', {}).get('budget_range') if state.get('preferences') else None
-            }
-            hotel_results = await self.hotel_rag.search(search_params)
-            state = self.state_manager.update_state(state, {
-                'hotel_options': hotel_results
-            })
-            logger.info(f"[HotelRAG] {len(hotel_results)}개 호텔 발견")
-            
-        except Exception as e:
-            logger.error(f"[HotelRAG] 실패: {str(e)}")
+        # Phase 4: 메트릭 - 실행 시간 추적
+        with self.metrics.track_node_execution('hotel_rag'):
+            try:
+                # A/B 테스팅: alpha 값 실험
+                variant = self.ab_testing.assign_variant(
+                    "hybrid_search_alpha",
+                    state['session_id']
+                )
+                
+                # 실험 변형 정보 저장
+                state = self.state_manager.update_state(state, {
+                    'ab_experiment_id': 'hybrid_search_alpha',
+                    'ab_variant': variant
+                })
+                
+                alpha = variant.get('config', {}).get('alpha', 0.5)
+                logger.info(f"[HotelRAG] A/B 테스팅 변형: {variant.get('variant_name')}, alpha={alpha}")
+                
+                # Phase 4: 메트릭 - A/B 변형 할당 기록
+                self.metrics.record_ab_assignment(
+                    "hybrid_search_alpha",
+                    variant.get('variant_name', 'unknown')
+                )
+                
+                search_params = {
+                    'destination': state.get('destination'),
+                    'preferences': state.get('preferences'),
+                    'budget': state.get('preferences', {}).get('budget_range') if state.get('preferences') else None,
+                    'alpha': alpha  # A/B 테스팅 파라미터
+                }
+                hotel_results = await self.hotel_rag.search(search_params)
+                state = self.state_manager.update_state(state, {
+                    'hotel_options': hotel_results
+                })
+                logger.info(f"[HotelRAG] {len(hotel_results)}개 호텔 발견")
+                
+                # Phase 4: 메트릭 - 검색 품질 기록
+                if hotel_results:
+                    avg_score = sum(h.combined_score for h in hotel_results) / len(hotel_results)
+                    self.metrics.record_search_quality(
+                        search_type='hotel',
+                        result_count=len(hotel_results),
+                        avg_score=avg_score
+                    )
+                
+            except Exception as e:
+                logger.error(f"[HotelRAG] 실패: {str(e)}")
         
         return state
     
@@ -226,7 +294,7 @@ class ARTWorkflow:
         return state
     
     async def response_generator_node(self, state: AppState) -> AppState:
-        """응답 생성"""
+        """응답 생성 (만족도 추적 포함)"""
         logger.info("[ResponseGenerator] 생성 시작")
         state = self.state_manager.log_execution_path(state, "response_generator")
         
@@ -244,6 +312,33 @@ class ARTWorkflow:
                 state,
                 ChatMessage(role="assistant", content=final_response.get('summary', ''))
             )
+            
+            # Phase 4: 암묵적 신호 기록
+            session_id = state['session_id']
+            start_time = self.session_start_times.get(session_id, time.time())
+            completion_time = time.time() - start_time
+            
+            self.satisfaction_tracker.record_implicit_signals(
+                session_id=session_id,
+                signals={
+                    'conversation_turns': len(state['chat_history']),
+                    'search_refinements': state['context_memory'].get('search_count', 0),
+                    'hotels_viewed': len(state['hotel_options']),
+                    'weather_available': bool(state['weather_forecast']),
+                    'time_to_completion': completion_time
+                }
+            )
+            
+            # 만족도 점수 계산
+            satisfaction_score = self.satisfaction_tracker.calculate_satisfaction_score(session_id)
+            state = self.state_manager.update_state(state, {
+                'satisfaction_score': satisfaction_score
+            })
+            
+            # Phase 4: 메트릭 - 만족도 점수 기록
+            self.metrics.record_satisfaction(satisfaction_score)
+            
+            logger.info(f"[ResponseGenerator] 만족도 점수: {satisfaction_score:.1f}/100")
             
         except Exception as e:
             logger.error(f"[ResponseGenerator] 실패: {str(e)}")
@@ -317,8 +412,12 @@ class ARTWorkflow:
             import uuid
             session_id = str(uuid.uuid4())
         
+        # Phase 4: 세션 시작 시간 기록
+        self.session_start_times[session_id] = time.time()
+        
         initial_state = self.state_manager.create_initial_state(session_id, user_query)
         return await self.run_from_state(initial_state)
+
     
     async def continue_conversation(self, user_input: str, session_id: str, previous_state: AppState) -> Dict[str, Any]:
         # 이전 상태 유지하며 새 쿼리 업데이트
