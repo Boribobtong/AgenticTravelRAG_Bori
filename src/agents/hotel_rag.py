@@ -38,7 +38,7 @@ class HotelRAGAgent:
 
         logger.info("HotelRAGAgent 초기화 완료")
     
-    async def search(self, search_params: Dict[str, Any]) -> List[HotelOption]:
+    async def search(self, search_params: Dict[str, Any], state: Optional[Dict[str, Any]] = None) -> List[HotelOption]:
         """
         호텔 검색 실행
         
@@ -84,13 +84,38 @@ class HotelRAGAgent:
                 logger.warning("RAG 인스턴스가 없어 빈 결과 반환")
                 return []
 
+            # If conversation memory provided via state, merge remembered preferences
+            if state:
+                cm = state.get('context_memory', {}).get('conversation_memory')
+                if cm:
+                    # cm may be a pydantic model or a plain dict
+                    user_prefs = None
+                    if hasattr(cm, 'user_preferences'):
+                        user_prefs = cm.user_preferences
+                    elif isinstance(cm, dict):
+                        user_prefs = cm.get('user_preferences')
+
+                    if user_prefs:
+                        # merge amenities
+                        if isinstance(user_prefs.get('amenities'), list):
+                            tags.extend([t for t in user_prefs.get('amenities') if t not in tags])
+                        # merge atmosphere
+                        if isinstance(user_prefs.get('atmosphere'), list):
+                            for atm in user_prefs.get('atmosphere'):
+                                if atm == 'family' and 'family' not in tags:
+                                    tags.append('family')
+                                elif atm == 'romantic' and 'romantic' not in tags:
+                                    tags.append('romantic')
+                                elif atm == 'business' and 'business' not in tags:
+                                    tags.append('business')
+
             results = self.rag.hybrid_search(
                 query=query,
                 location=location,
                 min_rating=min_rating,
                 tags=tags if tags else None,
                 top_k=10,
-                alpha=0.6  # 시맨틱 검색 가중치를 높게
+                alpha=None  # adaptive alpha 계산을 RAG 내부에 위임
             )
             
             # 결과를 HotelOption으로 변환
@@ -119,6 +144,22 @@ class HotelRAGAgent:
             hotel_options.sort(key=lambda x: x.combined_score, reverse=True)
             
             logger.info(f"호텔 검색 완료: {len(hotel_options)}개 결과")
+
+            # record search in conversation memory if available
+            if state:
+                cm = state.get('context_memory', {}).get('conversation_memory')
+                try:
+                    sample_results = [h.dict() for h in hotel_options[:3]]
+                    if hasattr(cm, 'add_search'):
+                        cm.add_search(search_params, sample_results)
+                    elif isinstance(cm, dict):
+                        history = cm.get('search_history', [])
+                        history.append({'params': search_params, 'result_count': len(hotel_options), 'sample': sample_results})
+                        cm['search_history'] = history
+                except Exception:
+                    # non-fatal: don't block return on memory update errors
+                    pass
+
             return hotel_options[:5]  # 상위 5개만 반환
             
         except Exception as e:
@@ -371,7 +412,7 @@ class HotelRAGAgent:
             location=previous_results[0].location if previous_results else None,
             min_rating=3.0,  # 기준 완화
             top_k=15,
-            alpha=0.7  # 시맨틱 가중치 증가
+            alpha=None
         )
         
         # 이전 결과 제외

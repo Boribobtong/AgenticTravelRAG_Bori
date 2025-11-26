@@ -1,3 +1,8 @@
+sentence-transformers>=2.2.2
+transformers>=4.0.0
+torch>=1.12.0
+# Optional (smaller) cross-encoder models may be used instead; installing
+# sentence-transformers will bring the appropriate dependencies.
 # Heavy ML requirements (install only when you need model training or local inference)
 torch>=1.13.0
 transformers>=4.30.0

@@ -10,13 +10,37 @@ import json
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
-import numpy as np
+# Optional/heavy dependencies: import lazily/with fallback so tests that only
+# exercise lightweight parts (e.g. adaptive_alpha) don't fail at import time in CI.
+try:
+    import numpy as np
+except Exception:
+    np = None
+
 from dataclasses import dataclass, asdict
 
-from elasticsearch import Elasticsearch, helpers
-from sentence_transformers import SentenceTransformer
-import pandas as pd
-from datasets import load_dataset
+try:
+    from elasticsearch import Elasticsearch, helpers
+except Exception:
+    Elasticsearch = None
+    helpers = None
+
+try:
+    from sentence_transformers import SentenceTransformer
+except Exception:
+    SentenceTransformer = None
+
+try:
+    import pandas as pd
+except Exception:
+    pd = None
+
+try:
+    from datasets import load_dataset
+except Exception:
+    load_dataset = None
+from .re_ranker import simple_rerank
+from .cross_reranker import try_cross_rerank
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -303,7 +327,7 @@ class ElasticSearchRAG:
         min_rating: Optional[float] = None,
         tags: Optional[List[str]] = None,
         top_k: int = 10,
-        alpha: float = 0.5
+        alpha: Optional[float] = None
     ) -> List[Dict[str, Any]]:
         """
         하이브리드 검색 (BM25 + 시맨틱)
@@ -329,6 +353,10 @@ class ElasticSearchRAG:
         if tags:
             filters.append({"terms": {"tags": tags}})
         
+        # If alpha not provided, compute an adaptive alpha based on query characteristics
+        if alpha is None:
+            alpha = self.adaptive_alpha(query)
+
         # 1. BM25 검색
         bm25_query = {
             "bool": {
@@ -384,6 +412,9 @@ class ElasticSearchRAG:
             semantic_results['hits']['hits'],
             alpha=alpha
         )
+
+        # 4.5 Optional re-ranking hook (placeholder for cross-encoder or other models)
+        combined_results = self.rerank_results(combined_results, query)
         
         # 4. 결과 포맷팅
         formatted_results = []
@@ -401,6 +432,46 @@ class ElasticSearchRAG:
             })
         
         return formatted_results
+
+    def adaptive_alpha(self, query: str) -> float:
+        """
+        간단한 쿼리 분석으로 동적 alpha를 반환합니다.
+        - 'romantic', 'quiet' 등 분위기 키워드가 있으면 시맨틱(벡터) 가중치를 높임
+        - 명시적 키워드(예: 'near', 'center', 'breakfast')가 많으면 BM25 가중치를 높임
+        """
+        q = query.lower()
+        semantic_keywords = ['romantic', 'quiet', 'cozy', 'intimate', 'relax', 'luxury', 'scenic']
+        keyword_indicators = ['near', 'nearby', 'center', 'close', 'breakfast', 'parking', 'pool']
+
+        semantic_score = sum(1 for k in semantic_keywords if k in q)
+        keyword_score = sum(1 for k in keyword_indicators if k in q)
+
+        if semantic_score > keyword_score:
+            return min(0.9, 0.6 + 0.1 * (semantic_score - keyword_score))
+        elif keyword_score > semantic_score:
+            return max(0.1, 0.4 - 0.1 * (keyword_score - semantic_score))
+        else:
+            return 0.5
+
+    def rerank_results(self, results: List[Dict[str, Any]], query: str) -> List[Dict[str, Any]]:
+        """
+        Re-ranking hook. 현재는 placeholder로 입력 결과를 그대로 반환합니다.
+        향후 Cross-Encoder나 학습된 순위모델을 적용할 수 있음.
+        """
+        # Try optional cross-encoder reranker first (enabled via env USE_CROSS_ENCODER).
+        try:
+            cross = try_cross_rerank(results, query)
+            if cross is not None:
+                return cross
+        except Exception:
+            # non-fatal: fall back to lightweight reranker
+            pass
+
+        # Fallback: lightweight lexical reranker
+        try:
+            return simple_rerank(results, query)
+        except Exception:
+            return results
     
     def _fuse_results(
         self,
