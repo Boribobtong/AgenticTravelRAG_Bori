@@ -3,14 +3,26 @@ Weather Tool Agent: 날씨 정보 조회 에이전트
 """
 
 import logging
-import aiohttp
+try:
+    import aiohttp
+    _AIOHTTP_AVAILABLE = True
+except Exception:
+    aiohttp = None
+    _AIOHTTP_AVAILABLE = False
 import asyncio
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timedelta
 from src.core.state import WeatherForecast
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
+# LLM 및 프롬프트 라이브러리는 선택적 의존성으로 처리합니다.
+try:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_core.prompts import ChatPromptTemplate
+    _LLM_AVAILABLE = True
+except Exception:
+    ChatGoogleGenerativeAI = None
+    ChatPromptTemplate = None
+    _LLM_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -24,13 +36,22 @@ class WeatherToolAgent:
         self.base_url = "https://api.open-meteo.com/v1/forecast"
         self.geocoding_url = "https://geocoding-api.open-meteo.com/v1/search"
         
-        # LLM 초기화 (Gemini 2.5 Flash - 빠르고 효율적)
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-flash",
-            temperature=0.5,
-        )
-        
-        logger.info("WeatherToolAgent 초기화 완료 (Open-Meteo API + Gemini)")
+        # LLM 초기화 (선택적)
+        if _LLM_AVAILABLE and ChatGoogleGenerativeAI is not None:
+            try:
+                self.llm = ChatGoogleGenerativeAI(
+                    model="gemini-2.5-flash",
+                    temperature=0.5,
+                )
+                logger.info("WeatherToolAgent LLM 초기화 완료 (Gemini)")
+            except Exception as e:
+                logger.warning(f"LLM 초기화 실패, 대체 동작 사용: {e}")
+                self.llm = None
+        else:
+            logger.warning("LLM 라이브러리 미설치: 날씨 조언 생성은 기본 문자열로 대체됩니다.")
+            self.llm = None
+
+        logger.info("WeatherToolAgent 초기화 완료 (Open-Meteo API)")
     
     async def get_forecast(self, location: str, dates: List[str], user_context: str = "") -> List[WeatherForecast]:
         """날씨 예보 조회 및 분석"""
@@ -88,23 +109,32 @@ class WeatherToolAgent:
         LLM을 사용하여 날씨 조언 생성 (사용자 컨텍스트 반영)
         """
         try:
+            # LLM이 없으면 간단한 로컬 요약 반환
+            if not self.llm or ChatPromptTemplate is None:
+                # 안전한 기본 메시지 (의견/주관적 표현 배제)
+                return (
+                    f"{forecast.date}: {forecast.description}. "
+                    f"기온 {forecast.temperature_min}°C~{forecast.temperature_max}°C, "
+                    f"강수량 {forecast.precipitation}mm."
+                )
+
             # 프롬프트에 여행 컨텍스트 추가
             system_msg = "당신은 여행 날씨 전문가입니다."
             if context:
                 system_msg += f" 여행자의 성향/목적은 다음과 같습니다: {context}"
-                
+
             custom_prompt = ChatPromptTemplate.from_messages([
                 ("system", system_msg),
                 ("human", """
                 날짜: {date} ({description})
                 기온: {min_temp}°C ~ {max_temp}°C
                 강수량: {precipitation}mm
-                
+
                 위 데이터에 기반하여 여행자 성향에 맞춘 3줄 요약 조언을 주세요.
                 (옷차림, 주의사항, 맞춤 활동)
                 """)
             ])
-            
+
             messages = custom_prompt.format_messages(
                 date=forecast.date,
                 description=forecast.description,
