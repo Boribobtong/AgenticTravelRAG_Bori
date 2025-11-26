@@ -16,6 +16,7 @@ from src.agents.hotel_rag import HotelRAGAgent
 from src.agents.weather_tool import WeatherToolAgent
 from src.agents.google_search import GoogleSearchAgent
 from src.agents.response_generator import ResponseGeneratorAgent
+from src.tools.ab_testing import ABTestingManager
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -35,10 +36,34 @@ class ARTWorkflow:
         self.google_search = GoogleSearchAgent()
         self.response_generator = ResponseGeneratorAgent()
         
+        # Phase 4: A/B Testing
+        self.ab_testing = ABTestingManager()
+        self._init_ab_experiments()
+        
         self.workflow = self._build_workflow()
         self.app = self.workflow.compile()
         
         logger.info("A.R.T Workflow 초기화 완료")
+    
+    def _init_ab_experiments(self):
+        """A/B 테스팅 실험 초기화"""
+        try:
+            # 하이브리드 검색 alpha 값 실험
+            experiment = self.ab_testing.create_experiment(
+                name="hybrid_search_alpha",
+                description="하이브리드 검색의 최적 alpha 값 찾기",
+                variants=[
+                    {"name": "bm25_heavy", "config": {"alpha": 0.3}, "description": "BM25 강화"},
+                    {"name": "balanced", "config": {"alpha": 0.5}, "description": "균형"},
+                    {"name": "vector_heavy", "config": {"alpha": 0.7}, "description": "Vector 강화"}
+                ],
+                traffic_split=[0.33, 0.34, 0.33]
+            )
+            # 실험 시작
+            self.ab_testing.start_experiment("hybrid_search_alpha")
+            logger.info("A/B 테스팅 실험 초기화 완료")
+        except Exception as e:
+            logger.warning(f"A/B 테스팅 실험 초기화 실패 (기존 실험 존재 가능): {e}")
     
     def _build_workflow(self) -> StateGraph:
         workflow = StateGraph(AppState)
@@ -130,15 +155,31 @@ class ARTWorkflow:
         return state
     
     async def hotel_rag_node(self, state: AppState) -> AppState:
-        """호텔 검색"""
+        """호텔 검색 (A/B 테스팅 적용)"""
         logger.info("[HotelRAG] 검색 시작")
         state = self.state_manager.log_execution_path(state, "hotel_rag")
         
         try:
+            # A/B 테스팅: alpha 값 실험
+            variant = self.ab_testing.assign_variant(
+                "hybrid_search_alpha",
+                state['session_id']
+            )
+            
+            # 실험 변형 정보 저장
+            state = self.state_manager.update_state(state, {
+                'ab_experiment_id': 'hybrid_search_alpha',
+                'ab_variant': variant
+            })
+            
+            alpha = variant.get('config', {}).get('alpha', 0.5)
+            logger.info(f"[HotelRAG] A/B 테스팅 변형: {variant.get('variant_name')}, alpha={alpha}")
+            
             search_params = {
                 'destination': state.get('destination'),
                 'preferences': state.get('preferences'),
-                'budget': state.get('preferences', {}).get('budget_range') if state.get('preferences') else None
+                'budget': state.get('preferences', {}).get('budget_range') if state.get('preferences') else None,
+                'alpha': alpha  # A/B 테스팅 파라미터
             }
             hotel_results = await self.hotel_rag.search(search_params)
             state = self.state_manager.update_state(state, {

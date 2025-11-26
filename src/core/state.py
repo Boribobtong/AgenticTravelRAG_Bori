@@ -145,6 +145,13 @@ class AppState(TypedDict):
     final_itinerary: Optional[Dict[str, Any]]  # 생성된 최종 여행 일정
     user_feedback: Optional[str]               # 사용자 피드백
     satisfaction_score: Optional[float]        # 만족도 점수
+    
+    # Phase 4: A/B Testing & Satisfaction Tracking
+    ab_experiment_id: Optional[str]            # A/B 테스트 실험 ID
+    ab_variant: Optional[Dict[str, Any]]       # 할당된 변형 정보
+    explicit_feedback: Optional[str]           # 명시적 피드백 ("positive", "negative", "neutral")
+    feedback_timestamp: Optional[datetime]     # 피드백 타임스탬프
+
 
 
 class StateManager:
@@ -179,8 +186,14 @@ class StateManager:
             error_messages=[],
             final_itinerary=None,
             user_feedback=None,
-            satisfaction_score=None
+            satisfaction_score=None,
+            # Phase 4 fields
+            ab_experiment_id=None,
+            ab_variant=None,
+            explicit_feedback=None,
+            feedback_timestamp=None
         )
+
     
     @staticmethod
     def update_state(state: AppState, updates: Dict[str, Any]) -> AppState:
