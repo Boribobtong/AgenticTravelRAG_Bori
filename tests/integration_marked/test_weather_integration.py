@@ -12,6 +12,7 @@ from src.agents.weather_tool import WeatherToolAgent, _AIOHTTP_AVAILABLE
 
 
 @pytest.mark.integration
+@pytest.mark.vcr()
 @pytest.mark.asyncio
 async def test_weather_get_forecast_live():
     """Integration test: call Open-Meteo via WeatherToolAgent and verify parsing."""
