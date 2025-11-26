@@ -10,6 +10,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Ensure no committed private keys
+        run: |
+          # Fail the job early if any .pem/.key files are present in the checked out repo.
+          set -e
+          FOUND_KEYS=$(git ls-files -- "*.pem" "*.key" || true)
+          if [ -n "$FOUND_KEYS" ]; then
+            echo "ERROR: Private key files present in repository (these must not be committed):"
+            echo "$FOUND_KEYS"
+            echo "Remove them from the repo and add to .gitignore, then rotate the keys."
+            exit 1
+          fi
       - name: Set up Python
         uses: actions/setup-python@v4
         with:

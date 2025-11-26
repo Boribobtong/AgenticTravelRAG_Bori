@@ -36,6 +36,10 @@ data/processed/
 data/embeddings/
 logs/
 *.log
+# Private keys and certificates (do NOT commit)
+*.pem
+*.key
+*private*.pem
 
 # ============================================
 # 🧪 Test Artifacts
