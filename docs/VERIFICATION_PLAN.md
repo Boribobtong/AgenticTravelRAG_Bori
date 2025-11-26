@@ -396,3 +396,21 @@ _개선 제안 사항 기록_
 **검증 시작일:** 2025-11-26  
 **검증 완료일:** TBD  
 **검증자:** Agent Verification 전문가
+
+## Todo
+Proceed with Option B: Update the CI workflow to run weather integration tests in cassette mode and separate the heavy ES tests.
+
+Please modify `.github/workflows/verification.yml` (or create a new one) to implement a split testing strategy:
+
+1. **Job 1: Fast Tests (Required)**
+   - Installs dependencies (including `pytest-vcr`).
+   - Runs standard Unit Tests AND the Weather Integration Test (using the recorded cassette).
+   - Does NOT require Docker/Elasticsearch.
+   - Command: `pytest -m "not integration or vcr"` (adjust markers so VCR tests run here).
+
+2. **Job 2: Heavy Integration Tests (Optional/Conditional)**
+   - Spins up the Elasticsearch service container.
+   - Runs the heavy RAG integration tests (Docker-dependent).
+   - This job should trigger on PRs or Manual Dispatch, but shouldn't block the "Fast Tests" from giving quick feedback.
+
+Goal: Ensure that I get quick feedback on logic and API parsing (via VCR) without waiting for Docker spin-up every time.
