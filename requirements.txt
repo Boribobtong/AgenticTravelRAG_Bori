@@ -16,6 +16,7 @@ transformers>=4.30.0
 # langchain
 # langchain-google-genai
 # google-generative-ai
+pytest-vcr>=1.0.0
 # AgenticTravelRAG Requirements
 # Python 3.9+ required
 
