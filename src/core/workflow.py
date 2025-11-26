@@ -180,16 +180,29 @@ class ARTWorkflow:
             )
             
             # 날씨 정보와 함께 조회 이력 저장
-            updates = {
-                'weather_forecast': weather_data,
-                'context_memory': {
-                    **state.get('context_memory', {}),
-                    'weather_destination': state['destination'],
-                    'weather_dates': state['travel_dates']
+            if weather_data:
+                # 정상적으로 날씨 데이터를 받은 경우
+                updates = {
+                    'weather_forecast': weather_data,
+                    'context_memory': {
+                        **state.get('context_memory', {}),
+                        'weather_destination': state['destination'],
+                        'weather_dates': state['travel_dates']
+                    }
                 }
-            }
-            state = self.state_manager.update_state(state, updates)
-            logger.info(f"[Weather] 조회 완료: {len(weather_data)}개 예보")
+                state = self.state_manager.update_state(state, updates)
+                logger.info(f"[Weather] 조회 완료: {len(weather_data)}개 예보")
+            else:
+                # 2주 제한으로 데이터를 받지 못한 경우
+                logger.warning(f"[Weather] 날씨 데이터 없음 (2주 제한 초과 가능)")
+                updates = {
+                    'weather_forecast': [],
+                    'context_memory': {
+                        **state.get('context_memory', {}),
+                        'weather_limitation_message': '날씨 정보는 오늘부터 2주 이내의 날짜만 제공됩니다. 여행 날짜를 2주 이내로 조정해 주세요.'
+                    }
+                }
+                state = self.state_manager.update_state(state, updates)
             
         except Exception as e:
             logger.error(f"[Weather] 실패: {str(e)}")

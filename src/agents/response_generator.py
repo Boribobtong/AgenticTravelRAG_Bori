@@ -41,7 +41,10 @@ class ResponseGeneratorAgent:
             dates = state.get('travel_dates', ['날짜 미정'])
             
             # 날씨 정보 포맷팅
-            weather_info = self._format_weather_forecast(state.get('weather_forecast', []))
+            weather_info = self._format_weather_forecast(
+                state.get('weather_forecast', []),
+                state.get('context_memory', {}).get('weather_limitation_message')
+            )
             
             messages = self.prompt.format_messages(
                 destination=destination,
@@ -70,11 +73,13 @@ class ResponseGeneratorAgent:
         if not hotels: return "검색된 호텔 없음"
         return "\n".join([f"- {h.name} (평점: {h.rating}, 가격: {h.price_range})" for h in hotels[:3]])
     
-    def _format_weather_forecast(self, forecasts: List) -> str:
+    def _format_weather_forecast(self, forecasts: List, limitation_message: str = None) -> str:
         """
         날씨 예보를 Markdown 테이블 형식으로 포맷팅
         """
         if not forecasts:
+            if limitation_message:
+                return f"⚠️ {limitation_message}"
             return "날씨 정보 없음 (날짜가 2주 이후이거나 조회 실패)"
         
         table = "| 날짜 | 날씨 | 최저기온 | 최고기온 | 강수량 |\n"
