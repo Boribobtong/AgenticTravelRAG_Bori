@@ -19,6 +19,18 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           pip install pytest
-      - name: Run verification tests
+      - name: Run unit verification tests
         run: |
           pytest -q tests/verification
+      - name: Run integration tests (optional)
+        if: github.event.inputs.run_integration == 'true' || startsWith(github.ref, 'refs/heads/verification/')
+        run: |
+          # Start ES via docker-compose in CI (requires runner with Docker)
+          docker-compose up -d elasticsearch
+          # Wait for ES to be ready
+          for i in {1..30}; do
+            if curl -sS http://localhost:9200 >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          pytest -q tests/integration
+          docker-compose down -v
