@@ -3,11 +3,17 @@ ElasticSearch 인덱싱 스크립트 (메타데이터 보강 버전)
 
 문제 해결: 원본 데이터에 호텔 위치/이름이 없으므로, 
 각 hotel_id에 랜덤하게 인기 도시와 가상의 호텔 이름을 부여하여 인덱싱합니다.
+
+사용법:
+    python -m data.scripts.index_to_elastic
+    또는
+    python data/scripts/index_to_elastic.py
 """
 
 import os
 import json
 import random
+import requests
 from pathlib import Path
 from loguru import logger
 from dotenv import load_dotenv
@@ -45,6 +51,20 @@ class MetadataGenerator:
 
 # ==========================================
 
+def check_elasticsearch_connection():
+    """ElasticSearch 연결 상태 확인"""
+    es_host = os.getenv("ES_HOST", "localhost")
+    es_port = os.getenv("ES_PORT", "9200")
+    es_url = f"http://{es_host}:{es_port}"
+    
+    try:
+        response = requests.get(es_url, timeout=5)
+        if response.status_code == 200:
+            return True, es_url
+        return False, es_url
+    except requests.exceptions.RequestException:
+        return False, es_url
+
 def load_raw_data():
     if not INPUT_FILE.exists():
         logger.error(f"데이터 파일이 없습니다: {INPUT_FILE}")
@@ -60,18 +80,37 @@ def load_raw_data():
     return data
 
 def index_data():
+    print("\n" + "="*60)
+    print("📊 ElasticSearch 인덱싱 시작")
+    print("="*60 + "\n")
+    
+    # ElasticSearch 연결 확인
+    print("🔍 ElasticSearch 연결 확인 중...")
+    is_connected, es_url = check_elasticsearch_connection()
+    
+    if not is_connected:
+        print(f"❌ ElasticSearch에 연결할 수 없습니다: {es_url}")
+        print("\n다음 명령어로 ElasticSearch를 시작하세요:")
+        print("  docker-compose -f docker/docker-compose.yml up -d elasticsearch")
+        print("\n연결 확인:")
+        print(f"  curl {es_url}\n")
+        print("="*60 + "\n")
+        return
+    
+    print(f"✅ ElasticSearch 연결 성공: {es_url}\n")
+    
     logger.info("데이터 인덱싱 시작 (메타데이터 보강 포함)...")
     
-    try:
-        rag = get_rag_instance()
-        rag.create_index(force_recreate=True)
-    except Exception as e:
-        logger.error(f"ElasticSearch 연결 실패: {str(e)}")
-        logger.warning("ElasticSearch 인덱싱을 건너뜁니다. 로컬 개발 모드에서는 이 단계를 스킵할 수 있습니다.")
-        return
+    rag = get_rag_instance()
+    print("🗑️  기존 인덱스 삭제 및 재생성 중...")
+    rag.create_index(force_recreate=True)
     
     raw_data = load_raw_data()
     if not raw_data:
+        print("❌ 데이터 파일이 없거나 비어있습니다.")
+        print(f"   먼저 데이터를 다운로드하세요:")
+        print(f"   python -m data.scripts.download_data\n")
+        print("="*60 + "\n")
         return
 
     # 메타데이터 생성기 초기화
@@ -79,6 +118,7 @@ def index_data():
     documents = []
     
     logger.info(f"총 {len(raw_data)}개 리뷰 처리 중...")
+    print(f"📦 총 {len(raw_data):,}개 리뷰 처리 중...")
 
     for idx, item in enumerate(raw_data):
         try:
@@ -111,15 +151,17 @@ def index_data():
             continue
 
     # 인덱싱 실행 (배치 처리)
-    try:
-        rag.index_documents(documents, batch_size=500)
-        
-        doc_count = rag.es.count(index=rag.index_name)['count']
-        logger.success(f"인덱싱 완료! 총 문서 수: {doc_count}")
-        logger.info("이제 'Paris', 'Seoul' 등으로 검색이 가능합니다.")
-    except Exception as e:
-        logger.error(f"인덱싱 실패: {str(e)}")
-        logger.warning("ElasticSearch 권한 문제 또는 연결 오류가 발생했습니다. 이 단계를 스킵합니다.")
+    print("💾 ElasticSearch에 인덱싱 중...")
+    rag.index_documents(documents, batch_size=500)
+    
+    doc_count = rag.es.count(index=rag.index_name)['count']
+    logger.success(f"인덱싱 완료! 총 문서 수: {doc_count}")
+    
+    print(f"\n✅ 인덱싱 완료!")
+    print(f"   인덱스: {rag.index_name}")
+    print(f"   문서 수: {doc_count:,}개")
+    print(f"\n💡 이제 'Paris', 'Seoul' 등으로 검색이 가능합니다.\n")
+    print("="*60 + "\n")
 
 if __name__ == "__main__":
     index_data()

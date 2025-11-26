@@ -90,45 +90,44 @@ class ARTWorkflow:
     # ==================== 노드 함수들 ====================
     
     async def parse_query_node(self, state: AppState) -> AppState:
-            """쿼리 파싱 및 컨텍스트 업데이트"""
-            logger.info(f"[QueryParser] 시작: {state['user_query'][:50]}...")
-            
-            state = self.state_manager.log_execution_path(state, "query_parser")
-            
-            try:
-                # [수정] state 전체를 넘겨주어 컨텍스트를 인식하게 함
-                parsed_info = await self.query_parser.parse(state['user_query'], state)
-                
-                logger.info(f"[QueryParser] 파싱 결과: {parsed_info}")
-                
-                updates = {}
-                if parsed_info.get('destination'):
-                    updates['destination'] = parsed_info['destination']
-                    logger.info(f"[QueryParser] 목적지 업데이트: {parsed_info['destination']}")
-                else:
-                    logger.warning(f"[QueryParser] 목적지 정보 없음. 파싱 결과: {parsed_info}")
-                
-                if parsed_info.get('dates'):
-                    updates['travel_dates'] = parsed_info['dates']
-                    
-                # traveler_count가 None이 아닐 때만 업데이트 (기존 인원 유지)
-                if parsed_info.get('traveler_count') is not None:
-                    updates['traveler_count'] = parsed_info['traveler_count']
-                    
-                if parsed_info.get('preferences'):
-                    current_prefs = state.get('preferences', {}) or {}
-                    # 단순 덮어쓰기가 아니라 병합하는 것이 더 좋음 (여기서는 일단 유지)
-                    updates['preferences'] = parsed_info['preferences']
+        """쿼리 파싱 및 컨텍스트 업데이트"""
+        logger.info(f"[QueryParser] 시작: {state['user_query'][:50]}...")
 
-                state = self.state_manager.update_state(state, updates)
-                logger.info(f"[QueryParser] 완료: 목적지={state.get('destination')}, 날짜={state.get('travel_dates')}")
-                
-            except Exception as e:
-                logger.error(f"[QueryParser] 실패: {str(e)}")
-                state['error_messages'].append(str(e))
-                state['conversation_state'] = ConversationState.ERROR
-            
-            return state
+        state = self.state_manager.log_execution_path(state, "query_parser")
+
+        try:
+            # 기존 호환성 유지: 대부분의 QueryParser.parse는 user_query만 받음
+            parsed_info = await self.query_parser.parse(state['user_query'])
+
+            logger.info(f"[QueryParser] 파싱 결과: {parsed_info}")
+
+            updates = {}
+            if parsed_info.get('destination'):
+                updates['destination'] = parsed_info['destination']
+                logger.info("[QueryParser] 목적지 업데이트: %s", parsed_info['destination'])
+            else:
+                logger.warning("[QueryParser] 목적지 정보 없음. 파싱 결과: %s", parsed_info)
+
+            if parsed_info.get('dates'):
+                updates['travel_dates'] = parsed_info['dates']
+
+            # traveler_count가 None이 아닐 때만 업데이트 (기존 인원 유지)
+            if parsed_info.get('traveler_count') is not None:
+                updates['traveler_count'] = parsed_info['traveler_count']
+
+            if parsed_info.get('preferences'):
+                # 단순 덮어쓰기가 아니라 병합하는 것이 더 좋음 (여기서는 일단 유지)
+                updates['preferences'] = parsed_info['preferences']
+
+            state = self.state_manager.update_state(state, updates)
+            logger.info("[QueryParser] 완료: 목적지=%s, 날짜=%s", state.get('destination'), state.get('travel_dates'))
+
+        except Exception as e:
+            logger.error("[QueryParser] 실패: %s", str(e))
+            state['error_messages'].append(str(e))
+            state['conversation_state'] = ConversationState.ERROR
+
+        return state
     
     async def hotel_rag_node(self, state: AppState) -> AppState:
         """호텔 검색"""
@@ -180,16 +179,29 @@ class ARTWorkflow:
             )
             
             # 날씨 정보와 함께 조회 이력 저장
-            updates = {
-                'weather_forecast': weather_data,
-                'context_memory': {
-                    **state.get('context_memory', {}),
-                    'weather_destination': state['destination'],
-                    'weather_dates': state['travel_dates']
+            if weather_data:
+                # 정상적으로 날씨 데이터를 받은 경우
+                updates = {
+                    'weather_forecast': weather_data,
+                    'context_memory': {
+                        **state.get('context_memory', {}),
+                        'weather_destination': state['destination'],
+                        'weather_dates': state['travel_dates']
+                    }
                 }
-            }
-            state = self.state_manager.update_state(state, updates)
-            logger.info(f"[Weather] 조회 완료: {len(weather_data)}개 예보")
+                state = self.state_manager.update_state(state, updates)
+                logger.info(f"[Weather] 조회 완료: {len(weather_data)}개 예보")
+            else:
+                # 2주 제한으로 데이터를 받지 못한 경우
+                logger.warning(f"[Weather] 날씨 데이터 없음 (2주 제한 초과 가능)")
+                updates = {
+                    'weather_forecast': [],
+                    'context_memory': {
+                        **state.get('context_memory', {}),
+                        'weather_limitation_message': '날씨 정보는 오늘부터 2주 이내의 날짜만 제공됩니다. 여행 날짜를 2주 이내로 조정해 주세요.'
+                    }
+                }
+                state = self.state_manager.update_state(state, updates)
             
         except Exception as e:
             logger.error(f"[Weather] 실패: {str(e)}")
@@ -258,8 +270,12 @@ class ARTWorkflow:
             })
             return state
         
-        # 기타 피드백 처리
-        state['context_memory']['retry_type'] = 'complete'
+        # 기타 피드백 처리: 재검색 트리거 단어가 있으면 retry_search로 라우팅
+        user_fb = state.get('user_feedback') or state.get('user_query')
+        if user_fb and isinstance(user_fb, str) and any(k in user_fb for k in ['다른 호텔', '다른', '다시', '다른 옵션', '다른 추천']):
+            state['context_memory']['retry_type'] = 'retry_search'
+        else:
+            state['context_memory']['retry_type'] = 'complete'
         return state
     
     # ==================== 라우팅 함수들 ====================
@@ -268,8 +284,15 @@ class ARTWorkflow:
         """파싱 후 경로 결정"""
         if state.get('conversation_state') == ConversationState.ERROR:
             return "error"
-            
-        # [핵심 수정] 목적지가 있으면 무조건 검색 수행 (새로운 질문 or 수정된 질문)
+        # 만약 사용자의 입력(또는 user_feedback)에 재검색/다른 옵션 요청 키워드가 포함되어 있으면
+        # feedback 흐름으로 보낸다 (예: '다른 호텔', '다시 찾아', '다른 옵션')
+        user_fb = state.get('user_feedback') or state.get('user_query')
+        if user_fb and isinstance(user_fb, str):
+            lowered = user_fb.lower()
+            if any(k in lowered for k in ['다른 호텔', '다른', '다시', '다른 옵션', '다른 추천']):
+                return 'feedback'
+
+        # 목적지가 있으면 검색 수행
         if state.get('destination'):
             return "search"
             
@@ -282,7 +305,10 @@ class ARTWorkflow:
         return "complete"
     
     def route_after_feedback(self, state: AppState) -> str:
-        return "complete"
+        rt = state.get('context_memory', {}).get('retry_type')
+        if rt == 'retry_search':
+            return 'retry_search'
+        return 'complete'
     
     # ==================== 실행 메서드 ====================
     

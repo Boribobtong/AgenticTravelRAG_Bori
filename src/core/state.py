@@ -46,6 +46,39 @@ class HotelOption(BaseModel):
     bm25_score: float = Field(description="BM25 검색 점수")
     combined_score: float = Field(description="하이브리드 검색 최종 점수")
     source_reviews: List[Dict[str, Any]] = Field(default_factory=list, description="원본 리뷰 샘플")
+    search_note: Optional[str] = Field(default=None, description="검색 조건 완화 등 안내 메시지")
+
+
+class ConversationMemory(BaseModel):
+    """
+    간단한 대화 메모리 클래스
+    - search_history: 이전 검색 파라미터 및 결과 요약
+    - user_preferences: 사용자 선호도 누적
+    - rejected_hotels: 사용자가 거부한 호텔 목록
+    """
+    search_history: List[Dict[str, Any]] = Field(default_factory=list)
+    user_preferences: Dict[str, Any] = Field(default_factory=dict)
+    rejected_hotels: List[str] = Field(default_factory=list)
+
+    def add_search(self, params: Dict[str, Any], results: List[Dict[str, Any]]):
+        self.search_history.append({
+            'params': params,
+            'result_count': len(results),
+            'sample': results[:3]
+        })
+
+    def update_preferences(self, feedback: Dict[str, Any]):
+        # 간단 병합 정책: 새로운 키는 덮어쓰기, 리스트는 확장
+        for k, v in feedback.items():
+            if isinstance(v, list):
+                existing = self.user_preferences.get(k, [])
+                self.user_preferences[k] = list(set(existing + v))
+            else:
+                self.user_preferences[k] = v
+
+    def reject_hotel(self, hotel_name: str):
+        if hotel_name not in self.rejected_hotels:
+            self.rejected_hotels.append(hotel_name)
 
 
 class WeatherForecast(BaseModel):
@@ -140,7 +173,7 @@ class StateManager:
                     content=user_query
                 )
             ],
-            context_memory={},
+            context_memory={'conversation_memory': ConversationMemory()},
             current_agent=None,
             execution_path=[],
             error_messages=[],
