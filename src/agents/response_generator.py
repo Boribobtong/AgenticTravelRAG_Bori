@@ -46,8 +46,11 @@ class ResponseGeneratorAgent:
             "| 날짜 | 날씨 | 최저기온 | 최고기온 | 강수량 |\n"
             "|------|------|----------|----------|--------|\n"
             "| 2025-12-01 | 약한 비 | 4.5°C | 9.1°C | 4.1mm |\n\n"
-            "## 🏨 추천 숙소: [호텔명]\n"
-            "...\n"
+            "## 🏨 추천 숙소\n"
+            "### 호텔명\n"
+            "- 평점: ⭐ 4.5\n"
+            "- 가격: $$-$$$\n"
+            "- 🔍 [구글에서 검색](https://www.google.com/search?q=호텔명)\n\n"
             "### 📅 1일차: [테마]\n"
             "- **오전 (09:00)**: 🏛️ [장소명] 방문\n"
             "- **점심**: 🍽️ [식당명]에서 현지식 즐기기\n\n"
@@ -109,8 +112,25 @@ class ResponseGeneratorAgent:
             return {'summary': f"오류 발생: {str(e)}", 'hotels': []}
 
     def _format_hotel_results(self, hotels: List) -> str:
-        if not hotels: return "검색된 호텔 없음"
-        return "\n".join([f"- {h.name} (평점: {h.rating}, 가격: {h.price_range})" for h in hotels[:3]])
+        """호텔 검색 결과를 포맷팅 (구글 검색 URL 포함)"""
+        if not hotels:
+            return "검색된 호텔 없음"
+        
+        import urllib.parse
+        
+        formatted_hotels = []
+        for h in hotels[:3]:
+            # 구글 검색 URL 생성
+            search_query = f"{h.name} hotel"
+            google_url = f"https://www.google.com/search?q={urllib.parse.quote(search_query)}"
+            
+            # 호텔 정보 + URL
+            formatted_hotels.append(
+                f"- {h.name} (평점: {h.rating}, 가격: {h.price_range})\n"
+                f"  🔍 [구글에서 검색]({google_url})"
+            )
+        
+        return "\n".join(formatted_hotels)
     
     def _format_weather_forecast(self, forecasts: List, limitation_message: str = None) -> str:
         """
