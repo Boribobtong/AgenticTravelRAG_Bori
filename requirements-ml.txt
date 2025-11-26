@@ -1,0 +1,6 @@
+# Heavy ML requirements (install only when you need model training or local inference)
+torch>=1.13.0
+transformers>=4.30.0
+sentence-transformers>=2.2.2
+sentencepiece>=0.1.98
+torchvision>=0.14.0

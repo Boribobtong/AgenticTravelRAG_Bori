@@ -7,7 +7,13 @@ ElasticSearch RAG 파이프라인을 사용하여
 
 import logging
 from typing import Dict, Any, List, Optional
-from src.rag.elasticsearch_rag import get_rag_instance, ElasticSearchRAG
+try:
+    from src.rag.elasticsearch_rag import get_rag_instance, ElasticSearchRAG
+    _RAG_AVAILABLE = True
+except Exception:
+    get_rag_instance = None
+    ElasticSearchRAG = None
+    _RAG_AVAILABLE = False
 from src.core.state import HotelOption
 
 logger = logging.getLogger(__name__)
@@ -20,7 +26,16 @@ class HotelRAGAgent:
     
     def __init__(self):
         """초기화"""
-        self.rag = get_rag_instance()
+        if _RAG_AVAILABLE and get_rag_instance is not None:
+            try:
+                self.rag = get_rag_instance()
+            except Exception as e:
+                logger.warning("RAG 인스턴스 생성 실패: %s", e)
+                self.rag = None
+        else:
+            logger.warning("ElasticSearch RAG 라이브러리 미설치: 검색 기능은 제한됩니다.")
+            self.rag = None
+
         logger.info("HotelRAGAgent 초기화 완료")
     
     async def search(self, search_params: Dict[str, Any]) -> List[HotelOption]:
@@ -65,6 +80,10 @@ class HotelRAGAgent:
                             tags.append('business')
             
             # ElasticSearch 하이브리드 검색 실행
+            if not self.rag:
+                logger.warning("RAG 인스턴스가 없어 빈 결과 반환")
+                return []
+
             results = self.rag.hybrid_search(
                 query=query,
                 location=location,
