@@ -1,0 +1,16 @@
+# Retraining Configuration
+
+# 재학습 트리거 조건
+drift_threshold: 0.15  # 데이터 드리프트 임계값
+performance_threshold: 5.0  # 만족도 저하 임계값 (%)
+min_new_samples: 1000  # 최소 신규 샘플 수
+retraining_interval_days: 30  # 정기 재학습 주기 (일)
+
+# 학습 설정
+batch_size: 32
+learning_rate: 0.0001
+epochs: 10
+validation_split: 0.2
+
+# 모델 배포 조건
+min_improvement: 2.0  # 최소 성능 개선률 (%)

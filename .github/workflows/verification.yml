@@ -1,0 +1,63 @@
+name: Verification Tests
+
+on:
+  push:
+    branches:
+      - 'verification/**'
+
+jobs:
+  verification:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure no committed private keys
+        run: |
+          # Fail the job early if any .pem/.key files are present in the checked out repo.
+          set -e
+          FOUND_KEYS=$(git ls-files -- "*.pem" "*.key" || true)
+          if [ -n "$FOUND_KEYS" ]; then
+            echo "ERROR: Private key files present in repository (these must not be committed):"
+            echo "$FOUND_KEYS"
+            echo "Remove them from the repo and add to .gitignore, then rotate the keys."
+            exit 1
+          fi
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      - name: Install dependencies (base + dev)
+        run: |
+          python -m pip install --upgrade pip
+          # Install base + dev/testing requirements (skip heavy ML packages).
+          # Use --no-cache-dir and --prefer-binary to reduce disk use during install.
+          export PIP_CACHE_DIR=/tmp/.pip-cache
+          mkdir -p "$PIP_CACHE_DIR"
+          if [ -f requirements-base.txt ]; then python -m pip install --no-cache-dir --prefer-binary -r requirements-base.txt; fi
+          if [ -f requirements-dev.txt ]; then python -m pip install --no-cache-dir --prefer-binary -r requirements-dev.txt; fi
+          # Purge pip cache to free space immediately after install (best-effort).
+          python -m pip cache purge || true
+      - name: Run unit verification tests
+        run: |
+          pytest -q tests/verification
+      - name: Run integration tests (optional)
+        if: github.event.inputs.run_integration == 'true' || startsWith(github.ref, 'refs/heads/verification/')
+        run: |
+          # Start ES via docker compose (prefer `docker compose` plugin, fall back to `docker-compose`)
+          if command -v docker > /dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
+            DC=(docker compose)
+          elif command -v docker-compose > /dev/null 2>&1; then
+            DC=(docker-compose)
+          else
+            echo "No docker compose command found; skipping ES integration tests"
+            exit 0
+          fi
+
+          "${DC[@]}" up -d elasticsearch
+          # Wait for ES to be ready
+          for i in {1..60}; do
+            if curl -sS http://localhost:9200 >/dev/null 2>&1; then break; fi
+            sleep 2
+          done
+          # Run integration tests (marked tests/integration_marked). This job uses the lightweight CI requirements.
+          pytest -q -m integration tests/integration_marked || true
+          "${DC[@]}" down -v

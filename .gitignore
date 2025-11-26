@@ -25,6 +25,7 @@ venv/
 .venv/
 env/
 *.egg-info/
+docs
 
 # ============================================
 # 📂 Data and Logs
@@ -33,8 +34,19 @@ env/
 data/raw/
 data/processed/
 data/embeddings/
+
+# Phase 4 테스트 데이터베이스 파일
+data/ab_tests.db
+data/satisfaction.db
+data/quality_monitor.db
+
 logs/
 *.log
+
+# Private keys and certificates (do NOT commit)
+*.pem
+*.key
+*private*.pem
 
 # ============================================
 # 🧪 Test Artifacts

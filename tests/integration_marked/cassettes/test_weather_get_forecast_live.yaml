@@ -1,0 +1,50 @@
+interactions:
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://geocoding-api.open-meteo.com/v1/search?name=Seoul&count=1&language=en&format=json
+  response:
+    body:
+      string: '{"results":[{"id":1835848,"name":"Seoul","latitude":37.566,"longitude":126.9784,"elevation":38.0,"feature_code":"PPLC","country_code":"KR","admin1_id":1835847,"timezone":"Asia/Seoul","population":10349312,"country_id":1835841,"country":"South
+        Korea","admin1":"Seoul"}],"generationtime_ms":0.45347214}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - deflate
+      Content-Length:
+      - '204'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Wed, 26 Nov 2025 13:34:15 GMT
+      X-Encoding-Time:
+      - 0.0038623809814453125 ms
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers: {}
+    method: GET
+    uri: https://api.open-meteo.com/v1/forecast?latitude=37.566&longitude=126.9784&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode&timezone=auto&start_date=2025-11-26&end_date=2025-11-27
+  response:
+    body:
+      string: "{\"latitude\":37.55,\"longitude\":127.0,\"generationtime_ms\":0.06103515625,\"utc_offset_seconds\":32400,\"timezone\":\"Asia/Seoul\",\"timezone_abbreviation\":\"GMT+9\",\"elevation\":27.0,\"daily_units\":{\"time\":\"iso8601\",\"temperature_2m_max\":\"\xB0C\",\"temperature_2m_min\":\"\xB0C\",\"precipitation_sum\":\"mm\",\"weathercode\":\"wmo
+        code\"},\"daily\":{\"time\":[\"2025-11-26\",\"2025-11-27\"],\"temperature_2m_max\":[8.2,8.0],\"temperature_2m_min\":[0.7,0.9],\"precipitation_sum\":[0.00,13.00],\"weathercode\":[1,63]}}"
+    headers:
+      Connection:
+      - keep-alive
+      Content-Encoding:
+      - deflate
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Wed, 26 Nov 2025 13:34:16 GMT
+      Transfer-Encoding:
+      - chunked
+    status:
+      code: 200
+      message: OK
+version: 1

@@ -16,6 +16,10 @@ from src.agents.hotel_rag import HotelRAGAgent
 from src.agents.weather_tool import WeatherToolAgent
 from src.agents.google_search import GoogleSearchAgent
 from src.agents.response_generator import ResponseGeneratorAgent
+from src.tools.ab_testing import ABTestingManager
+from src.tools.satisfaction_tracker import SatisfactionTracker
+from src.tools.metrics_collector import get_metrics_collector
+import time
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -35,10 +39,41 @@ class ARTWorkflow:
         self.google_search = GoogleSearchAgent()
         self.response_generator = ResponseGeneratorAgent()
         
+        # Phase 4: A/B Testing
+        self.ab_testing = ABTestingManager()
+        self._init_ab_experiments()
+        
+        # Phase 4: Satisfaction Tracking
+        self.satisfaction_tracker = SatisfactionTracker()
+        self.session_start_times = {}  # 세션별 시작 시간 추적
+        
+        # Phase 4: Metrics Collection
+        self.metrics = get_metrics_collector()
+        
         self.workflow = self._build_workflow()
         self.app = self.workflow.compile()
         
         logger.info("A.R.T Workflow 초기화 완료")
+    
+    def _init_ab_experiments(self):
+        """A/B 테스팅 실험 초기화"""
+        try:
+            # 하이브리드 검색 alpha 값 실험
+            experiment = self.ab_testing.create_experiment(
+                name="hybrid_search_alpha",
+                description="하이브리드 검색의 최적 alpha 값 찾기",
+                variants=[
+                    {"name": "bm25_heavy", "config": {"alpha": 0.3}, "description": "BM25 강화"},
+                    {"name": "balanced", "config": {"alpha": 0.5}, "description": "균형"},
+                    {"name": "vector_heavy", "config": {"alpha": 0.7}, "description": "Vector 강화"}
+                ],
+                traffic_split=[0.33, 0.34, 0.33]
+            )
+            # 실험 시작
+            self.ab_testing.start_experiment("hybrid_search_alpha")
+            logger.info("A/B 테스팅 실험 초기화 완료")
+        except Exception as e:
+            logger.warning(f"A/B 테스팅 실험 초기화 실패 (기존 실험 존재 가능): {e}")
     
     def _build_workflow(self) -> StateGraph:
         workflow = StateGraph(AppState)
@@ -90,65 +125,97 @@ class ARTWorkflow:
     # ==================== 노드 함수들 ====================
     
     async def parse_query_node(self, state: AppState) -> AppState:
-            """쿼리 파싱 및 컨텍스트 업데이트"""
-            logger.info(f"[QueryParser] 시작: {state['user_query'][:50]}...")
-            
-            state = self.state_manager.log_execution_path(state, "query_parser")
-            
-            try:
-                # [수정] state 전체를 넘겨주어 컨텍스트를 인식하게 함
-                parsed_info = await self.query_parser.parse(state['user_query'], state)
-                
-                logger.info(f"[QueryParser] 파싱 결과: {parsed_info}")
-                
-                updates = {}
-                if parsed_info.get('destination'):
-                    updates['destination'] = parsed_info['destination']
-                    logger.info(f"[QueryParser] 목적지 업데이트: {parsed_info['destination']}")
-                else:
-                    logger.warning(f"[QueryParser] 목적지 정보 없음. 파싱 결과: {parsed_info}")
-                
-                if parsed_info.get('dates'):
-                    updates['travel_dates'] = parsed_info['dates']
-                    
-                # traveler_count가 None이 아닐 때만 업데이트 (기존 인원 유지)
-                if parsed_info.get('traveler_count') is not None:
-                    updates['traveler_count'] = parsed_info['traveler_count']
-                    
-                if parsed_info.get('preferences'):
-                    current_prefs = state.get('preferences', {}) or {}
-                    # 단순 덮어쓰기가 아니라 병합하는 것이 더 좋음 (여기서는 일단 유지)
-                    updates['preferences'] = parsed_info['preferences']
+        """쿼리 파싱 및 컨텍스트 업데이트"""
+        logger.info(f"[QueryParser] 시작: {state['user_query'][:50]}...")
 
-                state = self.state_manager.update_state(state, updates)
-                logger.info(f"[QueryParser] 완료: 목적지={state.get('destination')}, 날짜={state.get('travel_dates')}")
-                
-            except Exception as e:
-                logger.error(f"[QueryParser] 실패: {str(e)}")
-                state['error_messages'].append(str(e))
-                state['conversation_state'] = ConversationState.ERROR
-            
-            return state
+        state = self.state_manager.log_execution_path(state, "query_parser")
+
+        try:
+            # 기존 호환성 유지: 대부분의 QueryParser.parse는 user_query만 받음
+            parsed_info = await self.query_parser.parse(state['user_query'])
+
+            logger.info(f"[QueryParser] 파싱 결과: {parsed_info}")
+
+            updates = {}
+            if parsed_info.get('destination'):
+                updates['destination'] = parsed_info['destination']
+                logger.info("[QueryParser] 목적지 업데이트: %s", parsed_info['destination'])
+            else:
+                logger.warning("[QueryParser] 목적지 정보 없음. 파싱 결과: %s", parsed_info)
+
+            if parsed_info.get('dates'):
+                updates['travel_dates'] = parsed_info['dates']
+
+            # traveler_count가 None이 아닐 때만 업데이트 (기존 인원 유지)
+            if parsed_info.get('traveler_count') is not None:
+                updates['traveler_count'] = parsed_info['traveler_count']
+
+            if parsed_info.get('preferences'):
+                # 단순 덮어쓰기가 아니라 병합하는 것이 더 좋음 (여기서는 일단 유지)
+                updates['preferences'] = parsed_info['preferences']
+
+            state = self.state_manager.update_state(state, updates)
+            logger.info("[QueryParser] 완료: 목적지=%s, 날짜=%s", state.get('destination'), state.get('travel_dates'))
+
+        except Exception as e:
+            logger.error("[QueryParser] 실패: %s", str(e))
+            state['error_messages'].append(str(e))
+            state['conversation_state'] = ConversationState.ERROR
+
+        return state
     
     async def hotel_rag_node(self, state: AppState) -> AppState:
-        """호텔 검색"""
+        """호텔 검색 (A/B 테스팅 + 메트릭 수집)"""
         logger.info("[HotelRAG] 검색 시작")
         state = self.state_manager.log_execution_path(state, "hotel_rag")
         
-        try:
-            search_params = {
-                'destination': state.get('destination'),
-                'preferences': state.get('preferences'),
-                'budget': state.get('preferences', {}).get('budget_range') if state.get('preferences') else None
-            }
-            hotel_results = await self.hotel_rag.search(search_params)
-            state = self.state_manager.update_state(state, {
-                'hotel_options': hotel_results
-            })
-            logger.info(f"[HotelRAG] {len(hotel_results)}개 호텔 발견")
-            
-        except Exception as e:
-            logger.error(f"[HotelRAG] 실패: {str(e)}")
+        # Phase 4: 메트릭 - 실행 시간 추적
+        with self.metrics.track_node_execution('hotel_rag'):
+            try:
+                # A/B 테스팅: alpha 값 실험
+                variant = self.ab_testing.assign_variant(
+                    "hybrid_search_alpha",
+                    state['session_id']
+                )
+                
+                # 실험 변형 정보 저장
+                state = self.state_manager.update_state(state, {
+                    'ab_experiment_id': 'hybrid_search_alpha',
+                    'ab_variant': variant
+                })
+                
+                alpha = variant.get('config', {}).get('alpha', 0.5)
+                logger.info(f"[HotelRAG] A/B 테스팅 변형: {variant.get('variant_name')}, alpha={alpha}")
+                
+                # Phase 4: 메트릭 - A/B 변형 할당 기록
+                self.metrics.record_ab_assignment(
+                    "hybrid_search_alpha",
+                    variant.get('variant_name', 'unknown')
+                )
+                
+                search_params = {
+                    'destination': state.get('destination'),
+                    'preferences': state.get('preferences'),
+                    'budget': state.get('preferences', {}).get('budget_range') if state.get('preferences') else None,
+                    'alpha': alpha  # A/B 테스팅 파라미터
+                }
+                hotel_results = await self.hotel_rag.search(search_params)
+                state = self.state_manager.update_state(state, {
+                    'hotel_options': hotel_results
+                })
+                logger.info(f"[HotelRAG] {len(hotel_results)}개 호텔 발견")
+                
+                # Phase 4: 메트릭 - 검색 품질 기록
+                if hotel_results:
+                    avg_score = sum(h.combined_score for h in hotel_results) / len(hotel_results)
+                    self.metrics.record_search_quality(
+                        search_type='hotel',
+                        result_count=len(hotel_results),
+                        avg_score=avg_score
+                    )
+                
+            except Exception as e:
+                logger.error(f"[HotelRAG] 실패: {str(e)}")
         
         return state
     
@@ -180,16 +247,29 @@ class ARTWorkflow:
             )
             
             # 날씨 정보와 함께 조회 이력 저장
-            updates = {
-                'weather_forecast': weather_data,
-                'context_memory': {
-                    **state.get('context_memory', {}),
-                    'weather_destination': state['destination'],
-                    'weather_dates': state['travel_dates']
+            if weather_data:
+                # 정상적으로 날씨 데이터를 받은 경우
+                updates = {
+                    'weather_forecast': weather_data,
+                    'context_memory': {
+                        **state.get('context_memory', {}),
+                        'weather_destination': state['destination'],
+                        'weather_dates': state['travel_dates']
+                    }
                 }
-            }
-            state = self.state_manager.update_state(state, updates)
-            logger.info(f"[Weather] 조회 완료: {len(weather_data)}개 예보")
+                state = self.state_manager.update_state(state, updates)
+                logger.info(f"[Weather] 조회 완료: {len(weather_data)}개 예보")
+            else:
+                # 2주 제한으로 데이터를 받지 못한 경우
+                logger.warning(f"[Weather] 날씨 데이터 없음 (2주 제한 초과 가능)")
+                updates = {
+                    'weather_forecast': [],
+                    'context_memory': {
+                        **state.get('context_memory', {}),
+                        'weather_limitation_message': '날씨 정보는 오늘부터 2주 이내의 날짜만 제공됩니다. 여행 날짜를 2주 이내로 조정해 주세요.'
+                    }
+                }
+                state = self.state_manager.update_state(state, updates)
             
         except Exception as e:
             logger.error(f"[Weather] 실패: {str(e)}")
@@ -214,7 +294,7 @@ class ARTWorkflow:
         return state
     
     async def response_generator_node(self, state: AppState) -> AppState:
-        """응답 생성"""
+        """응답 생성 (만족도 추적 포함)"""
         logger.info("[ResponseGenerator] 생성 시작")
         state = self.state_manager.log_execution_path(state, "response_generator")
         
@@ -232,6 +312,33 @@ class ARTWorkflow:
                 state,
                 ChatMessage(role="assistant", content=final_response.get('summary', ''))
             )
+            
+            # Phase 4: 암묵적 신호 기록
+            session_id = state['session_id']
+            start_time = self.session_start_times.get(session_id, time.time())
+            completion_time = time.time() - start_time
+            
+            self.satisfaction_tracker.record_implicit_signals(
+                session_id=session_id,
+                signals={
+                    'conversation_turns': len(state['chat_history']),
+                    'search_refinements': state['context_memory'].get('search_count', 0),
+                    'hotels_viewed': len(state['hotel_options']),
+                    'weather_available': bool(state['weather_forecast']),
+                    'time_to_completion': completion_time
+                }
+            )
+            
+            # 만족도 점수 계산
+            satisfaction_score = self.satisfaction_tracker.calculate_satisfaction_score(session_id)
+            state = self.state_manager.update_state(state, {
+                'satisfaction_score': satisfaction_score
+            })
+            
+            # Phase 4: 메트릭 - 만족도 점수 기록
+            self.metrics.record_satisfaction(satisfaction_score)
+            
+            logger.info(f"[ResponseGenerator] 만족도 점수: {satisfaction_score:.1f}/100")
             
         except Exception as e:
             logger.error(f"[ResponseGenerator] 실패: {str(e)}")
@@ -258,8 +365,12 @@ class ARTWorkflow:
             })
             return state
         
-        # 기타 피드백 처리
-        state['context_memory']['retry_type'] = 'complete'
+        # 기타 피드백 처리: 재검색 트리거 단어가 있으면 retry_search로 라우팅
+        user_fb = state.get('user_feedback') or state.get('user_query')
+        if user_fb and isinstance(user_fb, str) and any(k in user_fb for k in ['다른 호텔', '다른', '다시', '다른 옵션', '다른 추천']):
+            state['context_memory']['retry_type'] = 'retry_search'
+        else:
+            state['context_memory']['retry_type'] = 'complete'
         return state
     
     # ==================== 라우팅 함수들 ====================
@@ -268,8 +379,15 @@ class ARTWorkflow:
         """파싱 후 경로 결정"""
         if state.get('conversation_state') == ConversationState.ERROR:
             return "error"
-            
-        # [핵심 수정] 목적지가 있으면 무조건 검색 수행 (새로운 질문 or 수정된 질문)
+        # 만약 사용자의 입력(또는 user_feedback)에 재검색/다른 옵션 요청 키워드가 포함되어 있으면
+        # feedback 흐름으로 보낸다 (예: '다른 호텔', '다시 찾아', '다른 옵션')
+        user_fb = state.get('user_feedback') or state.get('user_query')
+        if user_fb and isinstance(user_fb, str):
+            lowered = user_fb.lower()
+            if any(k in lowered for k in ['다른 호텔', '다른', '다시', '다른 옵션', '다른 추천']):
+                return 'feedback'
+
+        # 목적지가 있으면 검색 수행
         if state.get('destination'):
             return "search"
             
@@ -282,7 +400,10 @@ class ARTWorkflow:
         return "complete"
     
     def route_after_feedback(self, state: AppState) -> str:
-        return "complete"
+        rt = state.get('context_memory', {}).get('retry_type')
+        if rt == 'retry_search':
+            return 'retry_search'
+        return 'complete'
     
     # ==================== 실행 메서드 ====================
     
@@ -291,8 +412,12 @@ class ARTWorkflow:
             import uuid
             session_id = str(uuid.uuid4())
         
+        # Phase 4: 세션 시작 시간 기록
+        self.session_start_times[session_id] = time.time()
+        
         initial_state = self.state_manager.create_initial_state(session_id, user_query)
         return await self.run_from_state(initial_state)
+
     
     async def continue_conversation(self, user_input: str, session_id: str, previous_state: AppState) -> Dict[str, Any]:
         # 이전 상태 유지하며 새 쿼리 업데이트
