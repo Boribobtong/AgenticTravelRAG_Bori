@@ -5,34 +5,40 @@ import logging
 from typing import Dict, Any, List
 from datetime import datetime
 
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate
+import os
+try:
+    # Optional LLM binding (only loaded when ENABLE_LLM=1)
+    from langchain_google_genai import ChatGoogleGenerativeAI
+except Exception:
+    ChatGoogleGenerativeAI = None
+
 
 logger = logging.getLogger(__name__)
 
 class ResponseGeneratorAgent:
     def __init__(self):
-        # [수정] 모델 변경: gemini-2.5-pro (최신 고성능 모델 사용)
-        self.llm = ChatGoogleGenerativeAI(
-            model="gemini-2.5-pro",
-            temperature=0.7,
-        )
-        
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", "당신은 전문 여행 컨설턴트입니다. 수집된 정보를 바탕으로 여행 일정을 작성해주세요."),
-            ("human", """
-목적지: {destination}
-여행 날짜: {dates}
-여행 인원: {traveler_count}명
-선호사항: {preferences}
-호텔 검색 결과: {hotel_results}
-날씨 예보:
-{weather_forecast}
-구글 검색 정보: {google_info}
+        # LLM initialization is optional and gated by environment to keep tests
+        # and CI lightweight. Set ENABLE_LLM=1 to attempt to use Google Gemini.
+        self.llm = None
+        self.enable_llm = os.getenv('ENABLE_LLM', '').lower() in ('1', 'true', 'yes') and ChatGoogleGenerativeAI is not None
+        if self.enable_llm:
+            try:
+                self.llm = ChatGoogleGenerativeAI(model="gemini-2.5-pro", temperature=0.7)
+            except Exception:
+                self.llm = None
 
-위 정보를 바탕으로 맞춤형 여행 계획을 작성해주세요.
-날씨 예보가 테이블 형식으로 제공된 경우, 응답에 그대로 포함시켜 주세요.""")
-        ])
+        # Use a simple string template for prompt formatting to avoid hard
+        # dependency on langchain prompt classes in tests.
+        self.prompt_template = (
+            "목적지: {destination}\n"
+            "여행 날짜: {dates}\n"
+            "여행 인원: {traveler_count}명\n"
+            "선호사항: {preferences}\n"
+            "호텔 검색 결과: {hotel_results}\n"
+            "날씨 예보:\n{weather_forecast}\n"
+            "구글 검색 정보: {google_info}\n\n"
+            "위 정보를 바탕으로 맞춤형 여행 계획을 작성해주세요."
+        )
         logger.info("ResponseGeneratorAgent(Gemini) 초기화 완료")
     
     async def generate(self, state: Dict[str, Any]) -> Dict[str, Any]:
@@ -46,7 +52,7 @@ class ResponseGeneratorAgent:
                 state.get('context_memory', {}).get('weather_limitation_message')
             )
             
-            messages = self.prompt.format_messages(
+            prompt_text = self.prompt_template.format(
                 destination=destination,
                 dates=' ~ '.join(dates) if isinstance(dates, list) else dates,
                 traveler_count=state.get('traveler_count', 1),
@@ -55,13 +61,21 @@ class ResponseGeneratorAgent:
                 weather_forecast=weather_info,
                 google_info=str(state.get('google_search_results', []))
             )
-            
-            response = await self.llm.ainvoke(messages)
-            
+
+            if self.llm:
+                try:
+                    response = await self.llm.ainvoke(prompt_text)
+                    content = getattr(response, 'content', str(response))
+                except Exception:
+                    content = "요약을 생성할 수 없습니다."
+            else:
+                # Lightweight fallback summary (non-LLM)
+                content = f"{destination}에 대한 간단한 일정입니다. 호텔 {len(state.get('hotel_options', []))}곳 추천." 
+
             return {
                 'destination': destination,
                 'dates': dates,
-                'summary': response.content,
+                'summary': content,
                 'hotels': [{'name': h.name, 'rating': h.rating, 'price': h.price_range, 'highlights': h.review_highlights} for h in state.get('hotel_options', [])[:3]],
                 'generated_at': datetime.now().isoformat()
             }
@@ -89,3 +103,31 @@ class ResponseGeneratorAgent:
             table += f"| {forecast.date} | {forecast.description} | {forecast.temperature_min}°C | {forecast.temperature_max}°C | {forecast.precipitation}mm |\n"
         
         return table
+
+    async def stream_response(self, state: Dict[str, Any]):
+        """Async generator that yields parts of the response incrementally.
+
+        This is a lightweight PoC for streaming responses without invoking the
+        LLM for every partial update. It yields three steps:
+        1) hotels list
+        2) weather table or message
+        3) final summary (placeholder if LLM not available)
+        """
+        # 1) hotels
+        hotels = [{'name': h.name, 'rating': h.rating, 'price': h.price_range, 'highlights': h.review_highlights} for h in state.get('hotel_options', [])[:3]]
+        yield {'step': 'hotels', 'hotels': hotels}
+
+        # 2) weather
+        weather_info = self._format_weather_forecast(
+            state.get('weather_forecast', []),
+            state.get('context_memory', {}).get('weather_limitation_message')
+        )
+        yield {'step': 'weather', 'weather': weather_info}
+
+        # 3) final summary — try LLM generate, but fall back to a simple placeholder
+        try:
+            final = await self.generate(state)
+            yield {'step': 'final', 'itinerary': final}
+        except Exception:
+            # Non-fatal fallback
+            yield {'step': 'final', 'itinerary': {'summary': '요약을 생성할 수 없습니다. 나중에 다시 시도해 주세요.'}}
