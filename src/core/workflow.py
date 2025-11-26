@@ -17,6 +17,8 @@ from src.agents.weather_tool import WeatherToolAgent
 from src.agents.google_search import GoogleSearchAgent
 from src.agents.response_generator import ResponseGeneratorAgent
 from src.tools.ab_testing import ABTestingManager
+from src.tools.satisfaction_tracker import SatisfactionTracker
+import time
 
 # 로깅 설정
 logging.basicConfig(level=logging.INFO)
@@ -39,6 +41,10 @@ class ARTWorkflow:
         # Phase 4: A/B Testing
         self.ab_testing = ABTestingManager()
         self._init_ab_experiments()
+        
+        # Phase 4: Satisfaction Tracking
+        self.satisfaction_tracker = SatisfactionTracker()
+        self.session_start_times = {}  # 세션별 시작 시간 추적
         
         self.workflow = self._build_workflow()
         self.app = self.workflow.compile()
@@ -267,7 +273,7 @@ class ARTWorkflow:
         return state
     
     async def response_generator_node(self, state: AppState) -> AppState:
-        """응답 생성"""
+        """응답 생성 (만족도 추적 포함)"""
         logger.info("[ResponseGenerator] 생성 시작")
         state = self.state_manager.log_execution_path(state, "response_generator")
         
@@ -285,6 +291,30 @@ class ARTWorkflow:
                 state,
                 ChatMessage(role="assistant", content=final_response.get('summary', ''))
             )
+            
+            # Phase 4: 암묵적 신호 기록
+            session_id = state['session_id']
+            start_time = self.session_start_times.get(session_id, time.time())
+            completion_time = time.time() - start_time
+            
+            self.satisfaction_tracker.record_implicit_signals(
+                session_id=session_id,
+                signals={
+                    'conversation_turns': len(state['chat_history']),
+                    'search_refinements': state['context_memory'].get('search_count', 0),
+                    'hotels_viewed': len(state['hotel_options']),
+                    'weather_available': bool(state['weather_forecast']),
+                    'time_to_completion': completion_time
+                }
+            )
+            
+            # 만족도 점수 계산
+            satisfaction_score = self.satisfaction_tracker.calculate_satisfaction_score(session_id)
+            state = self.state_manager.update_state(state, {
+                'satisfaction_score': satisfaction_score
+            })
+            
+            logger.info(f"[ResponseGenerator] 만족도 점수: {satisfaction_score:.1f}/100")
             
         except Exception as e:
             logger.error(f"[ResponseGenerator] 실패: {str(e)}")
@@ -358,8 +388,12 @@ class ARTWorkflow:
             import uuid
             session_id = str(uuid.uuid4())
         
+        # Phase 4: 세션 시작 시간 기록
+        self.session_start_times[session_id] = time.time()
+        
         initial_state = self.state_manager.create_initial_state(session_id, user_query)
         return await self.run_from_state(initial_state)
+
     
     async def continue_conversation(self, user_input: str, session_id: str, previous_state: AppState) -> Dict[str, Any]:
         # 이전 상태 유지하며 새 쿼리 업데이트
