@@ -46,6 +46,7 @@ class HotelOption(BaseModel):
     bm25_score: float = Field(description="BM25 검색 점수")
     combined_score: float = Field(description="하이브리드 검색 최종 점수")
     source_reviews: List[Dict[str, Any]] = Field(default_factory=list, description="원본 리뷰 샘플")
+    search_note: Optional[str] = Field(default=None, description="검색 조건 완화 등 안내 메시지")
 
 
 class WeatherForecast(BaseModel):
