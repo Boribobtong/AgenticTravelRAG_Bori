@@ -62,8 +62,13 @@ def load_raw_data():
 def index_data():
     logger.info("데이터 인덱싱 시작 (메타데이터 보강 포함)...")
     
-    rag = get_rag_instance()
-    rag.create_index(force_recreate=True)
+    try:
+        rag = get_rag_instance()
+        rag.create_index(force_recreate=True)
+    except Exception as e:
+        logger.error(f"ElasticSearch 연결 실패: {str(e)}")
+        logger.warning("ElasticSearch 인덱싱을 건너뜁니다. 로컬 개발 모드에서는 이 단계를 스킵할 수 있습니다.")
+        return
     
     raw_data = load_raw_data()
     if not raw_data:
@@ -106,11 +111,15 @@ def index_data():
             continue
 
     # 인덱싱 실행 (배치 처리)
-    rag.index_documents(documents, batch_size=500)
-    
-    doc_count = rag.es.count(index=rag.index_name)['count']
-    logger.success(f"인덱싱 완료! 총 문서 수: {doc_count}")
-    logger.info("이제 'Paris', 'Seoul' 등으로 검색이 가능합니다.")
+    try:
+        rag.index_documents(documents, batch_size=500)
+        
+        doc_count = rag.es.count(index=rag.index_name)['count']
+        logger.success(f"인덱싱 완료! 총 문서 수: {doc_count}")
+        logger.info("이제 'Paris', 'Seoul' 등으로 검색이 가능합니다.")
+    except Exception as e:
+        logger.error(f"인덱싱 실패: {str(e)}")
+        logger.warning("ElasticSearch 권한 문제 또는 연결 오류가 발생했습니다. 이 단계를 스킵합니다.")
 
 if __name__ == "__main__":
     index_data()

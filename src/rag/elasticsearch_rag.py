@@ -18,6 +18,19 @@ from sentence_transformers import SentenceTransformer
 import pandas as pd
 from datasets import load_dataset
 
+try:
+    import nltk
+    from nltk.corpus import wordnet
+    WORDNET_AVAILABLE = True
+    # WordNet 데이터 다운로드 (처음 실행 시)
+    try:
+        wordnet.synsets('test')
+    except LookupError:
+        nltk.download('wordnet', quiet=True)
+        nltk.download('omw-1.4', quiet=True)
+except ImportError:
+    WORDNET_AVAILABLE = False
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -48,6 +61,151 @@ class ElasticSearchRAG:
     TripAdvisor 리뷰 데이터를 인덱싱하고 하이브리드 검색을 제공합니다.
     """
     
+    @staticmethod
+    def _get_wordnet_synonyms(word: str, pos: str = None) -> List[str]:
+        """
+        WordNet을 사용하여 동의어 추출
+        
+        Args:
+            word: 단어
+            pos: 품사 (noun, verb, adj, adv)
+            
+        Returns:
+            동의어 리스트
+        """
+        if not WORDNET_AVAILABLE:
+            return []
+        
+        synonyms = set()
+        pos_tag = None
+        if pos == 'noun':
+            pos_tag = wordnet.NOUN
+        elif pos == 'verb':
+            pos_tag = wordnet.VERB
+        elif pos == 'adj':
+            pos_tag = wordnet.ADJ
+        elif pos == 'adv':
+            pos_tag = wordnet.ADV
+        
+        # 동의어 집합 추출
+        for syn in wordnet.synsets(word, pos=pos_tag):
+            for lemma in syn.lemmas():
+                # 언더스코어를 공백으로 변환
+                synonym = lemma.name().replace('_', ' ')
+                if synonym.lower() != word.lower():
+                    synonyms.add(synonym.lower())
+        
+        return list(synonyms)
+    
+    @staticmethod
+    def _generate_hotel_synonyms() -> List[str]:
+        """
+        호텔/여행 도메인 특화 동의어 생성 (WordNet + 수동 정의)
+        
+        Returns:
+            동의어 리스트 (Solr 형식)
+        """
+        # 기본 호텔/여행 관련 동의어 (수동 정의)
+        base_synonyms = [
+            # 분위기/환경
+            "quiet,peaceful,calm,tranquil,serene",
+            "romantic,intimate,cozy,charming",
+            "luxury,luxurious,premium,upscale,high-end,deluxe,elegant,sophisticated",
+            "budget,cheap,affordable,economical,inexpensive",
+            
+            # 청결
+            "clean,tidy,spotless,pristine,immaculate",
+            "dirty,unclean,filthy,messy",
+            
+            # 서비스
+            "friendly,hospitable,welcoming,warm,courteous,pleasant,helpful",
+            "rude,unfriendly,impolite,discourteous",
+            "professional,competent,efficient,skilled",
+            
+            # 위치
+            "central,downtown,city center",
+            "nearby,close,near,adjacent",
+            "remote,isolated,far,distant",
+            
+            # 시설
+            "breakfast,morning meal",
+            "wifi,internet,wireless,wi-fi",
+            "pool,swimming pool",
+            "gym,fitness center,workout room,exercise room",
+            "spa,wellness center",
+            "parking,car park,garage",
+            "restaurant,dining,eatery",
+            "bar,lounge,pub",
+            
+            # 객실
+            "room,suite,accommodation,chamber",
+            "spacious,large,roomy,big,ample",
+            "tiny,small,cramped,compact",
+            "comfortable,cozy",
+            "view,scenery,vista",
+            "balcony,terrace,patio",
+            
+            # 가격
+            "expensive,costly,pricey,overpriced",
+            "reasonable,fair",
+            
+            # 음식
+            "delicious,tasty,yummy",
+            
+            # 상태
+            "modern,contemporary,updated,renovated",
+            "old,dated,outdated,worn",
+            "new,brand new,fresh",
+            
+            # 소음
+            "noisy,loud,disturbing",
+            
+            # 여행 타입
+            "family friendly,kid friendly",
+            "business hotel,business center",
+            "pet friendly,pets allowed,dog friendly",
+            
+            # 품질
+            "excellent,outstanding,exceptional,superb,fantastic,wonderful,great",
+            "poor,bad,terrible,awful,disappointing",
+            "good,nice,pleasant,satisfactory",
+            "average,okay,mediocre,decent"
+        ]
+        
+        # WordNet으로 추가 동의어 확장 (선택적)
+        if WORDNET_AVAILABLE:
+            logger.info("WordNet을 사용하여 동의어 확장 중...")
+            
+            # 이미 수동 정의된 단어들 (중복 방지)
+            manually_defined = {
+                'quiet', 'romantic', 'luxury', 'budget', 'clean', 'dirty',
+                'friendly', 'rude', 'professional', 'spacious', 'comfortable',
+                'excellent', 'poor', 'good', 'average', 'wonderful'
+            }
+            
+            # 중요 단어들에 대해 WordNet 동의어 추가
+            important_words = {
+                'beautiful': 'adj',
+                'convenient': 'adj',
+                'amazing': 'adj',
+                'perfect': 'adj',
+                'helpful': 'adj',
+            }
+            
+            for word, pos in important_words.items():
+                # 수동 정의된 단어는 건너뛰기
+                if word in manually_defined:
+                    continue
+                    
+                synonyms = ElasticSearchRAG._get_wordnet_synonyms(word, pos)
+                if synonyms and len(synonyms) > 0:
+                    # 너무 많으면 상위 5개만
+                    synonym_str = f"{word},{','.join(synonyms[:5])}"
+                    base_synonyms.append(synonym_str)
+                    logger.debug(f"WordNet synonyms for '{word}': {synonyms[:5]}")
+        
+        return base_synonyms
+    
     def __init__(
         self,
         es_host: str = "localhost",
@@ -76,6 +234,15 @@ class ElasticSearchRAG:
             max_retries=3,
             retry_on_timeout=True
         )
+        '''
+        # ElasticSearch 연결 (보안 비활성화 모드)
+        self.es = Elasticsearch(
+            [{'host': es_host, 'port': es_port, 'scheme': 'http'}],
+            timeout=30,
+            max_retries=3,
+            retry_on_timeout=True
+        )
+        '''
         
         self.index_name = index_name
         
@@ -156,16 +323,7 @@ class ElasticSearchRAG:
                         "filter": {
                             "synonym_filter": {
                                 "type": "synonym",
-                                "synonyms": [
-                                    "quiet,peaceful,calm,tranquil",
-                                    "romantic,intimate,cozy",
-                                    "luxury,luxurious,premium,upscale",
-                                    "budget,cheap,affordable,economical",
-                                    "clean,tidy,spotless,pristine",
-                                    "friendly,hospitable,welcoming",
-                                    "breakfast,morning meal",
-                                    "wifi,internet,wireless"
-                                ]
+                                "synonyms": self._generate_hotel_synonyms()
                             }
                         }
                     }

@@ -11,7 +11,7 @@ langchain>=0.2.0
 langchain-openai>=0.1.14
 langchain-community>=0.2.0
 langchain-core>=0.2.0
-langchain-google-genai>=1.0.0  # [추가] Google Gemini 지원
+langchain-google-genai>=1.0.0  # Google Gemini support
 langgraph>=0.1.17
 langsmith>=0.1.0
 
@@ -25,19 +25,20 @@ sentence-transformers==2.2.2
 # Data Processing
 datasets>=2.18.0,<3.0.0
 pandas>=2.0.3
-numpy<2.0.0                    # [수정] Numpy 2.0 호환성 문제 방지
+numpy<2.0.0                    # Prevent Numpy 2.0 compatibility issues
 huggingface-hub>=0.19.4
+nltk>=3.8.0                    # WordNet synonym processing
 
 # Web Framework
 fastapi>=0.104.1
 uvicorn[standard]>=0.24.0
 pydantic>=2.5.0
 aiohttp>=3.9.0
-httpx>=0.27.0                  # [추가] HTTP 클라이언트
+httpx>=0.27.0                  # HTTP client
 
 # UI
 streamlit>=1.28.0
-protobuf>=4.25.3               # [추가] Streamlit 의존성 충돌 방지
+protobuf>=4.25.3               # Prevent Streamlit dependency conflicts
 
 # Testing
 pytest==7.4.3
