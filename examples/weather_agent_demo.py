@@ -278,7 +278,25 @@ async def process_scenario(agent, scenario, args, printer, semaphore):
             
         return result_summary
 
-# ... (print_summary_report 함수 유지)
+def print_summary_report(results):
+    """테스트 요약 리포트 출력"""
+    print("\n" + "="*60)
+    print("📊 테스트 요약 리포트")
+    print("="*60)
+    print(f"| {'도시':<12} | {'결과':<8} | {'소요시간':<8} | {'검증':<6} |")
+    print("|" + "-"*14 + "|" + "-"*10 + "|" + "-"*10 + "|" + "-"*8 + "|")
+    
+    success_count = 0
+    for res in results:
+        status_icon = "✅" if res['status'] == "SUCCESS" else "❌"
+        if res['status'] == "SUCCESS":
+            success_count += 1
+            
+        print(f"| {res['location']:<12} | {status_icon:<8} | {res['elapsed']:>6.2f}s | {res['validation']:<6} |")
+        
+    print("="*60)
+    print(f"총 {len(results)}개 시나리오 중 {success_count}개 성공 ({success_count/len(results)*100:.1f}%)")
+    print("="*60 + "\n")
 
 async def demo_weather_agent(args):
     print("🌤️ Weather Agent Demo 시작...")

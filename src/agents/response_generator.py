@@ -26,9 +26,12 @@ class ResponseGeneratorAgent:
 여행 인원: {traveler_count}명
 선호사항: {preferences}
 호텔 검색 결과: {hotel_results}
-날씨 예보: {weather_forecast}
+날씨 예보:
+{weather_forecast}
 구글 검색 정보: {google_info}
-위 정보를 바탕으로 맞춤형 여행 계획을 작성해주세요.""")
+
+위 정보를 바탕으로 맞춤형 여행 계획을 작성해주세요.
+날씨 예보가 테이블 형식으로 제공된 경우, 응답에 그대로 포함시켜 주세요.""")
         ])
         logger.info("ResponseGeneratorAgent(Gemini) 초기화 완료")
     
@@ -37,13 +40,19 @@ class ResponseGeneratorAgent:
             destination = state.get('destination', '목적지 미정')
             dates = state.get('travel_dates', ['날짜 미정'])
             
+            # 날씨 정보 포맷팅
+            weather_info = self._format_weather_forecast(
+                state.get('weather_forecast', []),
+                state.get('context_memory', {}).get('weather_limitation_message')
+            )
+            
             messages = self.prompt.format_messages(
                 destination=destination,
                 dates=' ~ '.join(dates) if isinstance(dates, list) else dates,
                 traveler_count=state.get('traveler_count', 1),
                 preferences=str(state.get('preferences', {})),
                 hotel_results=self._format_hotel_results(state.get('hotel_options', [])),
-                weather_forecast=str(state.get('weather_forecast', [])),
+                weather_forecast=weather_info,
                 google_info=str(state.get('google_search_results', []))
             )
             
@@ -63,3 +72,20 @@ class ResponseGeneratorAgent:
     def _format_hotel_results(self, hotels: List) -> str:
         if not hotels: return "검색된 호텔 없음"
         return "\n".join([f"- {h.name} (평점: {h.rating}, 가격: {h.price_range})" for h in hotels[:3]])
+    
+    def _format_weather_forecast(self, forecasts: List, limitation_message: str = None) -> str:
+        """
+        날씨 예보를 Markdown 테이블 형식으로 포맷팅
+        """
+        if not forecasts:
+            if limitation_message:
+                return f"⚠️ {limitation_message}"
+            return "날씨 정보 없음 (날짜가 2주 이후이거나 조회 실패)"
+        
+        table = "| 날짜 | 날씨 | 최저기온 | 최고기온 | 강수량 |\n"
+        table += "|------|------|----------|----------|--------|\n"
+        
+        for forecast in forecasts:
+            table += f"| {forecast.date} | {forecast.description} | {forecast.temperature_min}°C | {forecast.temperature_max}°C | {forecast.precipitation}mm |\n"
+        
+        return table

@@ -106,6 +106,50 @@ class HotelRAGAgent:
             logger.error(f"호텔 검색 실패: {str(e)}")
             return []
     
+    async def search_with_fallback(self, search_params: Dict[str, Any]) -> List[HotelOption]:
+        """
+        Fallback 로직이 포함된 호텔 검색
+        
+        1차: 모든 조건으로 검색
+        2차: 필수 조건만 (목적지 + 최소 평점)
+        3차: 빈 결과 반환 (workflow에서 처리)
+        
+        Args:
+            search_params: 검색 파라미터
+            
+        Returns:
+            HotelOption 리스트
+        """
+        # 1차 검색: 모든 조건
+        results = await self.search(search_params)
+        
+        if len(results) >= 3:
+            logger.info(f"[Fallback] 1차 검색 성공: {len(results)}개 결과")
+            return results
+        
+        # 2차 검색: 조건 완화 (필수 조건만)
+        logger.warning(f"[Fallback] 1차 검색 결과 부족 ({len(results)}개), 조건 완화 시도")
+        
+        relaxed_params = {
+            'destination': search_params.get('destination'),
+            'preferences': {
+                # 분위기, 편의시설 제거, 최소 평점만 유지
+            }
+        }
+        
+        relaxed_results = await self.search(relaxed_params)
+        
+        if len(relaxed_results) >= 3:
+            logger.info(f"[Fallback] 2차 검색 성공: {len(relaxed_results)}개 결과")
+            # 완화 메시지 추가
+            for hotel in relaxed_results:
+                hotel.search_note = "조건을 일부 완화하여 검색했습니다."
+            return relaxed_results
+        
+        # 3차: 빈 결과 반환 (workflow에서 안내 메시지 처리)
+        logger.warning(f"[Fallback] 2차 검색도 결과 부족, 빈 결과 반환")
+        return []
+    
     def _build_search_query(self, search_params: Dict[str, Any]) -> str:
         """
         검색 쿼리 구성
