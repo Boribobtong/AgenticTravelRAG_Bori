@@ -30,6 +30,21 @@ class ResponseGeneratorAgent:
         # Use a simple string template for prompt formatting to avoid hard
         # dependency on langchain prompt classes in tests.
         self.prompt_template = (
+            "당신은 전문 여행 컨설턴트입니다. 수집된 정보를 바탕으로 맞춤형 여행 계획을 작성해주세요.\n\n"
+            "**중요: 각 섹션 헤더에 관련 이모지를 추가하세요:**\n"
+            "- 숙소/호텔: 🏨\n"
+            "- 날씨/기후: 🌤️ 또는 ☀️, 🌧️, ❄️ (날씨에 따라)\n"
+            "- 일정/스케줄: 📅\n"
+            "- 아침 활동: 🌅\n"
+            "- 점심 시간: 🍽️\n"
+            "- 저녁 활동: 🌆\n"
+            "- 교통/이동: 🚇, 🚌, 🚶\n"
+            "- 음식/레스토랑: 🍴, 🥐, 🍷\n"
+            "- 관광지/명소: 🗼, 🏛️, ⛪\n"
+            "- 문화/예술: 🎨, 🎭\n"
+            "- 쇼핑: 🛍️\n"
+            "- 자연/공원: 🌳, 🏞️\n"
+            "- 팁/조언: 💡\n\n"
             "목적지: {destination}\n"
             "여행 날짜: {dates}\n"
             "여행 인원: {traveler_count}명\n"
@@ -37,7 +52,7 @@ class ResponseGeneratorAgent:
             "호텔 검색 결과: {hotel_results}\n"
             "날씨 예보:\n{weather_forecast}\n"
             "구글 검색 정보: {google_info}\n\n"
-            "위 정보를 바탕으로 맞춤형 여행 계획을 작성해주세요."
+            "위 정보를 바탕으로 이모지가 포함된 맞춤형 여행 계획을 작성해주세요."
         )
         logger.info("ResponseGeneratorAgent(Gemini) 초기화 완료")
     
