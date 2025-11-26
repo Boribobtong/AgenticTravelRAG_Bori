@@ -1,9 +1,12 @@
-import pytest
+import sys
+import os
 
-try:
-    from src.agents.weather_tool import WeatherToolAgent
-except Exception:
-    pytest.skip("WeatherToolAgent not available", allow_module_level=True)
+# Ensure repository root is on sys.path so `src` package can be imported when running tests.
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
+from src.agents.weather_tool import WeatherToolAgent
 
 
 def test_get_weather_description():
