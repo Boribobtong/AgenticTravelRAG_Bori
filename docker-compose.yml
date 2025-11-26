@@ -1,7 +1,9 @@
-version: '3.8'
 services:
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:8.6.3
+    # Updated to a recent, available Elasticsearch image.
+    # If this specific tag still fails in your CI runner, replace with a valid tag
+    # from https://www.docker.elastic.co/r/elasticsearch/elasticsearch
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
