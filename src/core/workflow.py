@@ -277,19 +277,60 @@ class ARTWorkflow:
         return state
     
     async def google_search_node(self, state: AppState) -> AppState:
-        """구글 검색"""
+        """구글 검색 (호텔 정보 + 실시간 가격)"""
+        logger.info(f"[GoogleSearch] 호텔 {len(state.get('hotel_options', [])[:3])}곳 정보 검색 시작")
+        
         state = self.state_manager.log_execution_path(state, "google_search")
         if not state.get('hotel_options'):
             return state
             
+        # 1. 여행 날짜 추출 (가격 검색용)
+        dates = state.get('travel_dates')
+        check_in, check_out = None, None
+        if dates and len(dates) >= 2:
+            check_in, check_out = dates[0], dates[1]
+            
         try:
             search_results = []
+            
+            # 상위 3개 호텔에 대해 검색 수행
             for hotel in state['hotel_options'][:3]:
-                result = await self.google_search.search_hotel_info(hotel.name, hotel.location)
-                search_results.append(result)
+                # A. 기본 정보 검색 (기존 로직)
+                # search_hotel_info는 GoogleSearchResult 객체를 반환합니다.
+                search_result_obj = await self.google_search.search_hotel_info(hotel.name, hotel.location)
+                
+                # B. 실시간 가격 검색 (날짜가 있는 경우 추가 실행)
+                if check_in and check_out:
+                    try:
+                        price_data = await self.google_search.search_hotel_prices(
+                            hotel.name, 
+                            check_in, 
+                            check_out
+                        )
+                        
+                        # 가격 정보가 있으면 결과 리스트에 추가
+                        if price_data:
+                            # 식별을 위해 type 필드 추가
+                            price_data['type'] = 'price_comparison'
+                            # 기존 results 리스트에 가격 정보 딕셔너리 추가
+                            search_result_obj.results.insert(0, price_data) 
+                            
+                    except Exception as e:
+                        logger.warning(f"[GoogleSearch] 가격 검색 실패 ({hotel.name}): {e}")
+
+                search_results.append(search_result_obj)
+                
+            # C. 관광지 정보 검색 (넣을까 말까 고민중)
+            # if state.get('destination'):
+            #     attractions = await self.google_search.search_attractions(state['destination'])
+            #     # 필요 시 search_results나 별도 필드에 추가 가능
+                
             state = self.state_manager.update_state(state, {'google_search_results': search_results})
-        except Exception:
-            pass # 구글 검색 실패는 무시
+            
+        except Exception as e:
+            logger.error(f"[GoogleSearch] 전체 프로세스 실패: {e}")
+            # 실패하더라도 에러를 던지지 않고 진행 (검색 결과 없이 응답 생성)
+            pass 
         
         return state
     
