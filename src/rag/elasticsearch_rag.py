@@ -430,26 +430,41 @@ class ElasticSearchRAG:
                 tags.append(tag)
         
         return tags
-    
-    def index_documents(self, documents: List[ReviewDocument], batch_size: int = 100):
+        
+    def index_documents(self, documents: List[ReviewDocument], batch_size: int = 2000, use_dummy_embedding: bool = True):
         """
-        문서 인덱싱 (벡터 임베딩 포함)
+        문서 인덱싱 함수
         
         Args:
-            documents: ReviewDocument 리스트
-            batch_size: 배치 크기
+            documents: 인덱싱할 문서 리스트
+            batch_size: 한 번에 처리할 문서 수 (기본값: 2000)
+            use_dummy_embedding: 
+                - True: 랜덤 벡터 사용 (속도 빠름, 시스템 연동 테스트용, 시맨틱 검색 불가)
+                - False: 실제 AI 모델 사용 (속도 느림, 실제 서비스용, 시맨틱 검색 가능)
         """
-        
-        logger.info(f"인덱싱 시작: {len(documents)}개 문서")
+        import numpy as np # numpy가 없다면 상단에 import 필요
+
+        mode_str = "🚀 더미(랜덤) 벡터" if use_dummy_embedding else "🧠 실제 AI 임베딩"
+        logger.info(f"인덱싱 시작: {len(documents)}개 문서 (모드: {mode_str})")
         
         # 배치 단위로 처리
         for i in range(0, len(documents), batch_size):
             batch = documents[i:i+batch_size]
             
-            # 리뷰 텍스트 임베딩
-            texts = [doc.review_text for doc in batch]
-            embeddings = self.embedding_model.encode(texts, show_progress_bar=False)
-            
+            # ---------------------------------------------------------
+            # [모드 전환] 임베딩 생성 방식 선택
+            # ---------------------------------------------------------
+            if use_dummy_embedding:
+                # [Fast Mode] 0.0 ~ 1.0 사이의 랜덤 벡터 생성
+                # CPU 부하가 거의 없으며, 0 벡터 에러(Cosine Similarity Error)를 방지함
+                embeddings = np.random.rand(len(batch), self.embedding_dim)
+            else:
+                # [Real Mode] 실제 SentenceTransformer 모델로 임베딩 생성
+                # CPU/GPU 연산이 필요하며 시간이 오래 걸림
+                texts = [doc.review_text for doc in batch]
+                embeddings = self.embedding_model.encode(texts, show_progress_bar=False)
+            # ---------------------------------------------------------
+
             # ElasticSearch bulk 작업 준비
             actions = []
             for doc, embedding in zip(batch, embeddings):
@@ -464,19 +479,34 @@ class ElasticSearchRAG:
                 }
                 actions.append(action)
             
-            # Bulk 인덱싱
-            success, failed = helpers.bulk(
-                self.es,
-                actions,
-                stats_only=True,
-                raise_on_error=False
-            )
-            
-            logger.info(f"배치 인덱싱: 성공={success}, 실패={failed}")
+            # [디버깅 & 실행] stats_only=False로 설정하여 상세 에러 확인
+            try:
+                success, items = helpers.bulk(
+                    self.es,
+                    actions,
+                    stats_only=False,  # 상세 에러 확인을 위해 False 설정
+                    raise_on_error=False,
+                    request_timeout=60 # 대용량 처리를 위해 타임아웃 여유 있게 설정
+                )
+                
+                # 실패한 항목이 있다면 첫 번째 에러 원인을 로그에 출력
+                failed_items = [item for item in items if item.get('index', {}).get('error')]
+                if failed_items:
+                    first_error = failed_items[0]['index']['error']
+                    logger.error(f"❌ 인덱싱 실패 원인 (첫번째 항목): {json.dumps(first_error, indent=2, ensure_ascii=False)}")
+                    logger.info(f"배치 인덱싱: 성공={success}, 실패={len(failed_items)}")
+                else:
+                    logger.info(f"배치 인덱싱: 성공={success}, 실패=0")
+                    
+            except Exception as e:
+                logger.error(f"Bulk 실행 중 치명적 오류: {str(e)}")
         
         # 인덱스 새로고침
         self.es.indices.refresh(index=self.index_name)
-        logger.info("인덱싱 완료")
+        logger.info("인덱싱 로직 종료")
+
+
+
     
     def hybrid_search(
         self,

@@ -277,19 +277,69 @@ class ARTWorkflow:
         return state
     
     async def google_search_node(self, state: AppState) -> AppState:
-        """구글 검색"""
+        """구글 검색 및 실시간 가격 정보 병합"""
+        logger.info(f"[GoogleSearch] 호텔 {len(state.get('hotel_options', [])[:3])}곳 정보 검색 시작")
+        
         state = self.state_manager.log_execution_path(state, "google_search")
         if not state.get('hotel_options'):
             return state
             
+        # 1. 여행 날짜 추출
+        dates = state.get('travel_dates')
+        check_in, check_out = None, None
+        if dates and len(dates) >= 2:
+            check_in, check_out = dates[0], dates[1]
+            
         try:
             search_results = []
-            for hotel in state['hotel_options'][:3]:
-                result = await self.google_search.search_hotel_info(hotel.name, hotel.location)
-                search_results.append(result)
-            state = self.state_manager.update_state(state, {'google_search_results': search_results})
-        except Exception:
-            pass # 구글 검색 실패는 무시
+            updated_hotel_options = [] # 업데이트된 호텔 정보를 담을 리스트
+            
+            # 상위 3개 호텔에 대해 검색 수행
+            for i, hotel in enumerate(state['hotel_options']):
+                # 상위 3개만 실제 검색 수행
+                if i < 3:
+                    # A. 기본 정보 검색
+                    search_result_obj = await self.google_search.search_hotel_info(hotel.name, hotel.location)
+                    
+                    # B. 실시간 가격 검색 및 데이터 병합
+                    if check_in and check_out:
+                        try:
+                            price_data = await self.google_search.search_hotel_prices(
+                                hotel.name, 
+                                check_in, 
+                                check_out
+                            )
+                            
+                            # 검색된 가격 정보를 HotelOption 객체에 직접 업데이트
+                            if price_data and price_data.get('prices'):
+                                lowest_price = price_data['prices'][0].get('price')
+                                # 기존 가격 범위를 실시간 가격으로 교체
+                                hotel.price_range = f"{lowest_price} (실시간)"
+                                
+                                # 상세 정보를 하이라이트에 추가 (LLM이 참고하도록)
+                                price_info = f"실시간 최저가: {lowest_price} ({price_data['prices'][0]['provider']})"
+                                hotel.review_highlights.insert(0, price_info)
+                                
+                                # 구글 결과 리스트에도 추가
+                                price_data['type'] = 'price_comparison'
+                                search_result_obj.results.insert(0, price_data)
+                                
+                        except Exception as e:
+                            logger.warning(f"[GoogleSearch] 가격 검색 실패 ({hotel.name}): {e}")
+
+                    search_results.append(search_result_obj)
+                
+                updated_hotel_options.append(hotel)
+                
+            # 업데이트된 호텔 정보를 상태에 반영
+            state = self.state_manager.update_state(state, {
+                'google_search_results': search_results,
+                'hotel_options': updated_hotel_options 
+            })
+            
+        except Exception as e:
+            logger.error(f"[GoogleSearch] 전체 프로세스 실패: {e}")
+            pass 
         
         return state
     
