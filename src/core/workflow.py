@@ -277,14 +277,14 @@ class ARTWorkflow:
         return state
     
     async def google_search_node(self, state: AppState) -> AppState:
-        """구글 검색 (호텔 정보 + 실시간 가격)"""
+        """구글 검색 및 실시간 가격 정보 병합"""
         logger.info(f"[GoogleSearch] 호텔 {len(state.get('hotel_options', [])[:3])}곳 정보 검색 시작")
         
         state = self.state_manager.log_execution_path(state, "google_search")
         if not state.get('hotel_options'):
             return state
             
-        # 1. 여행 날짜 추출 (가격 검색용)
+        # 1. 여행 날짜 추출
         dates = state.get('travel_dates')
         check_in, check_out = None, None
         if dates and len(dates) >= 2:
@@ -292,44 +292,53 @@ class ARTWorkflow:
             
         try:
             search_results = []
+            updated_hotel_options = [] # 업데이트된 호텔 정보를 담을 리스트
             
             # 상위 3개 호텔에 대해 검색 수행
-            for hotel in state['hotel_options'][:3]:
-                # A. 기본 정보 검색 (기존 로직)
-                # search_hotel_info는 GoogleSearchResult 객체를 반환합니다.
-                search_result_obj = await self.google_search.search_hotel_info(hotel.name, hotel.location)
-                
-                # B. 실시간 가격 검색 (날짜가 있는 경우 추가 실행)
-                if check_in and check_out:
-                    try:
-                        price_data = await self.google_search.search_hotel_prices(
-                            hotel.name, 
-                            check_in, 
-                            check_out
-                        )
-                        
-                        # 가격 정보가 있으면 결과 리스트에 추가
-                        if price_data:
-                            # 식별을 위해 type 필드 추가
-                            price_data['type'] = 'price_comparison'
-                            # 기존 results 리스트에 가격 정보 딕셔너리 추가
-                            search_result_obj.results.insert(0, price_data) 
+            for i, hotel in enumerate(state['hotel_options']):
+                # 상위 3개만 실제 검색 수행
+                if i < 3:
+                    # A. 기본 정보 검색
+                    search_result_obj = await self.google_search.search_hotel_info(hotel.name, hotel.location)
+                    
+                    # B. 실시간 가격 검색 및 데이터 병합
+                    if check_in and check_out:
+                        try:
+                            price_data = await self.google_search.search_hotel_prices(
+                                hotel.name, 
+                                check_in, 
+                                check_out
+                            )
                             
-                    except Exception as e:
-                        logger.warning(f"[GoogleSearch] 가격 검색 실패 ({hotel.name}): {e}")
+                            # 검색된 가격 정보를 HotelOption 객체에 직접 업데이트
+                            if price_data and price_data.get('prices'):
+                                lowest_price = price_data['prices'][0].get('price')
+                                # 기존 가격 범위를 실시간 가격으로 교체
+                                hotel.price_range = f"{lowest_price} (실시간)"
+                                
+                                # 상세 정보를 하이라이트에 추가 (LLM이 참고하도록)
+                                price_info = f"실시간 최저가: {lowest_price} ({price_data['prices'][0]['provider']})"
+                                hotel.review_highlights.insert(0, price_info)
+                                
+                                # 구글 결과 리스트에도 추가
+                                price_data['type'] = 'price_comparison'
+                                search_result_obj.results.insert(0, price_data)
+                                
+                        except Exception as e:
+                            logger.warning(f"[GoogleSearch] 가격 검색 실패 ({hotel.name}): {e}")
 
-                search_results.append(search_result_obj)
+                    search_results.append(search_result_obj)
                 
-            # C. 관광지 정보 검색 (넣을까 말까 고민중)
-            # if state.get('destination'):
-            #     attractions = await self.google_search.search_attractions(state['destination'])
-            #     # 필요 시 search_results나 별도 필드에 추가 가능
+                updated_hotel_options.append(hotel)
                 
-            state = self.state_manager.update_state(state, {'google_search_results': search_results})
+            # 업데이트된 호텔 정보를 상태에 반영
+            state = self.state_manager.update_state(state, {
+                'google_search_results': search_results,
+                'hotel_options': updated_hotel_options 
+            })
             
         except Exception as e:
             logger.error(f"[GoogleSearch] 전체 프로세스 실패: {e}")
-            # 실패하더라도 에러를 던지지 않고 진행 (검색 결과 없이 응답 생성)
             pass 
         
         return state

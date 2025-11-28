@@ -83,6 +83,7 @@ class GoogleSearchAgent:
                         data = await response.json()
                         return self._parse_hotel_prices(data)
                     else:
+                        logger.error(f"가격 API 호출 실패 status={response.status}")
                         return self._get_mock_price_data(hotel_name)
                         
         except Exception as e:
@@ -118,7 +119,7 @@ class GoogleSearchAgent:
             return self._get_mock_attractions(location)
     
     def _parse_search_results(self, query: str, data: Dict) -> GoogleSearchResult:
-        """검색 결과 파싱 (안전한 타입 체크 추가)"""
+        """검색 결과 파싱"""
         results = []
         
         # 일반 검색 결과
@@ -134,7 +135,6 @@ class GoogleSearchAgent:
         if 'knowledge_graph' in data:
             kg = data['knowledge_graph']
             
-            # [핵심 수정] rating 필드가 딕셔너리가 아닌 float일 수 있음을 처리
             rating_data = kg.get('rating')
             rating_val = None
             reviews_val = None
@@ -160,18 +160,45 @@ class GoogleSearchAgent:
         )
     
     def _parse_hotel_prices(self, data: Dict) -> Dict[str, Any]:
-        """호텔 가격 정보 파싱"""
+        """호텔 가격 정보 파싱 (리스트/단일 결과 모두 지원)"""
         prices = []
-        for property in data.get('properties', [])[:5]:
-            prices.append({
-                'provider': property.get('provider', 'Unknown'),
-                'price': property.get('rate_per_night', {}).get('lowest', 'N/A'),
-                'total_price': property.get('total_rate', {}).get('lowest', 'N/A'),
-                'link': property.get('link', '')
-            })
         
+        # Case 1: 여러 호텔 검색 결과 (기존 로직 - properties 리스트)
+        if 'properties' in data:
+            for property in data.get('properties', [])[:5]:
+                prices.append({
+                    'provider': property.get('name', 'Google Hotels'),
+                    'price': property.get('rate_per_night', {}).get('lowest', 'N/A'),
+                    'total_price': property.get('total_rate', {}).get('lowest', 'N/A'),
+                    'link': property.get('link', '')
+                })
+
+        # Case 2: 단일 호텔 상세 결과 (prices 리스트)
+        elif 'prices' in data:
+            for p in data.get('prices', [])[:5]:
+                prices.append({
+                    'provider': p.get('source', 'Unknown'),  # 예: Booking.com, Expedia
+                    'price': p.get('rate_per_night', {}).get('lowest', 'N/A'),
+                    'total_price': p.get('total_rate', {}).get('lowest', 'N/A'),
+                    'link': p.get('link', '')
+                })
+        
+        # Case 3: 리스트 없이 최상위에 가격 정보가 하나만 있는 경우
+        if not prices and 'rate_per_night' in data:
+             prices.append({
+                'provider': 'Google Hotels',
+                'price': data.get('rate_per_night', {}).get('lowest', 'N/A'),
+                'total_price': data.get('total_rate', {}).get('lowest', 'N/A'),
+                'link': data.get('link', '')
+             })
+
+        # 호텔 이름 찾기
+        hotel_name_res = data.get('search_information', {}).get('query', '')
+        if not hotel_name_res:
+            hotel_name_res = data.get('name', '')
+
         return {
-            'hotel_name': data.get('search_information', {}).get('query', ''),
+            'hotel_name': hotel_name_res,
             'check_in': data.get('search_parameters', {}).get('check_in_date', ''),
             'check_out': data.get('search_parameters', {}).get('check_out_date', ''),
             'prices': prices,
@@ -179,12 +206,13 @@ class GoogleSearchAgent:
         }
     
     def _calculate_avg_price(self, prices: List[Dict]) -> float:
-        """평균 가격 계산"""
+        """평균 가격 계산 """
         valid_prices = []
         for p in prices:
             try:
                 price_str = str(p.get('price', ''))
-                price_clean = price_str.replace('$', '').replace(',', '')
+                # 통화 기호 및 콤마 제거
+                price_clean = price_str.replace('$', '').replace(',', '').replace('€', '').strip()
                 if price_clean and price_clean != 'N/A':
                     valid_prices.append(float(price_clean))
             except:
