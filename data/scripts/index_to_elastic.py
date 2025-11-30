@@ -146,14 +146,14 @@ def index_data():
                 if len(documents_batch) >= BATCH_SIZE:
                     # [수정] use_dummy_embedding=True 옵션 추가 (속도 최적화 모드)
                     # 실제 임베딩 모델 사용 시 use_dummy_embedding=False로 변경
-                    rag.index_documents(documents_batch, batch_size=BATCH_SIZE, use_dummy_embedding=True)
+                    rag.index_documents(documents_batch, batch_size=BATCH_SIZE, use_dummy_embedding=False)
                     documents_batch = [] # 비우기
 
     # 남은 문서 처리
     if documents_batch:
         # [수정] use_dummy_embedding=True 옵션 추가
         # 실제 임베딩 모델 사용 시 use_dummy_embedding=False로 변경
-        rag.index_documents(documents_batch, batch_size=BATCH_SIZE, use_dummy_embedding=True)
+        rag.index_documents(documents_batch, batch_size=BATCH_SIZE, use_dummy_embedding=False)
     
     print(f"\n✅ 인덱싱 완료!")
 
