@@ -325,8 +325,17 @@ class ARTWorkflow:
 
                             # 검색된 가격 정보를 HotelOption 객체에 직접 업데이트
                             if price_data and price_data.get('prices'):
-                                # ... (기존 가격 업데이트 로직 유지) ...
-                                pass
+                                lowest_price = price_data['prices'][0].get('price')
+                                # 기존 가격 범위를 실시간 가격으로 교체
+                                hotel.price_range = f"{lowest_price} (실시간)"
+                                
+                                # 상세 정보를 하이라이트에 추가 (LLM이 참고하도록)
+                                price_info = f"실시간 최저가: {lowest_price} ({price_data['prices'][0]['provider']})"
+                                hotel.review_highlights.insert(0, price_info)
+                                
+                                # 구글 결과 리스트에도 추가
+                                price_data['type'] = 'price_comparison'
+                                search_result_obj.results.insert(0, price_data)
                                 
                         except Exception as e:
                             logger.warning(f"[GoogleSearch] 가격 검색 실패 ({hotel.name}): {e}")
