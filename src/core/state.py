@@ -5,10 +5,13 @@ AppState: A.R.T 시스템의 중앙 상태 관리 모듈
 상태 정보를 저장하는 핵심 데이터 구조입니다.
 """
 
-from typing import TypedDict, List, Dict, Optional, Any
+from typing import TypedDict, List, Dict, Optional, Any, TYPE_CHECKING
 from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from src.agents.safety_info import SafetyInfo
 
 
 class ConversationState(str, Enum):
@@ -131,10 +134,14 @@ class AppState(TypedDict):
     hotel_options: List[HotelOption]         # RAG 호텔 검색 결과
     weather_forecast: List[WeatherForecast]  # 날씨 예보
     google_search_results: List[GoogleSearchResult]  # 구글 검색 결과
+    safety_info: Optional[Any]               # 안전 정보 (SafetyInfo)
     
     # 대화 히스토리 및 메모리
     chat_history: List[ChatMessage]          # 전체 대화 기록
     context_memory: Dict[str, Any]           # 컨텍스트 메모리 (임시 정보)
+    short_term_context: Optional[str]        # Short-term 메모리 컨텍스트
+    long_term_context: Optional[str]         # Long-term 메모리 컨텍스트
+    user_id: Optional[str]                   # 사용자 ID (Long-term 메모리용)
     
     # 실행 메타데이터
     current_agent: Optional[str]             # 현재 실행 중인 에이전트
@@ -174,6 +181,7 @@ class StateManager:
             hotel_options=[],
             weather_forecast=[],
             google_search_results=[],
+            safety_info=None,
             chat_history=[
                 ChatMessage(
                     role="user",
@@ -181,6 +189,9 @@ class StateManager:
                 )
             ],
             context_memory={'conversation_memory': ConversationMemory()},
+            short_term_context=None,
+            long_term_context=None,
+            user_id=None,
             current_agent=None,
             execution_path=[],
             error_messages=[],

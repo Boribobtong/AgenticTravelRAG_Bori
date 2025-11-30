@@ -11,11 +11,14 @@ import logging
 import asyncio
 
 from src.core.state import AppState, StateManager, ConversationState, ChatMessage
+from src.core.memory import get_memory_manager
 from src.agents.query_parser import QueryParserAgent
 from src.agents.hotel_rag import HotelRAGAgent  
 from src.agents.weather_tool import WeatherToolAgent
 from src.agents.google_search import GoogleSearchAgent
 from src.agents.response_generator import ResponseGeneratorAgent
+from src.agents.safety_info import SafetyInfoAgent
+from src.agents.currency_converter_node import execute_currency_conversion
 from src.tools.ab_testing import ABTestingManager
 from src.tools.satisfaction_tracker import SatisfactionTracker
 from src.tools.metrics_collector import get_metrics_collector
@@ -39,6 +42,7 @@ class ARTWorkflow:
         self.weather_tool = WeatherToolAgent()
         self.google_search = GoogleSearchAgent()
         self.response_generator = ResponseGeneratorAgent()
+        self.safety_info = SafetyInfoAgent()
         # Wikipedia tool (Phase 4)
         try:
             self.wiki_tool = WikipediaCustomTool()
@@ -85,9 +89,12 @@ class ARTWorkflow:
         workflow = StateGraph(AppState)
         
         workflow.add_node("query_parser", self.parse_query_node)
+        workflow.add_node("memory_manager", self.memory_manager_node)
         workflow.add_node("hotel_rag", self.hotel_rag_node)
         workflow.add_node("weather_tool", self.weather_tool_node)
+        workflow.add_node("safety_info", self.safety_info_node)
         workflow.add_node("google_search", self.google_search_node)
+        workflow.add_node("currency_conversion", self.currency_conversion_node)
         workflow.add_node("response_generator", self.response_generator_node)
         workflow.add_node("feedback_handler", self.feedback_handler_node)
         
@@ -97,15 +104,18 @@ class ARTWorkflow:
             "query_parser",
             self.route_after_parsing,
             {
-                "search": "hotel_rag",     # 검색 실행
+                "search": "memory_manager",     # 메모리 저장 후 검색 실행
                 "feedback": "feedback_handler", # 단순 피드백 처리
                 "error": END
             }
         )
         
+        workflow.add_edge("memory_manager", "hotel_rag")
         workflow.add_edge("hotel_rag", "weather_tool")
-        workflow.add_edge("weather_tool", "google_search")
-        workflow.add_edge("google_search", "response_generator")
+        workflow.add_edge("weather_tool", "safety_info")
+        workflow.add_edge("safety_info", "google_search")
+        workflow.add_edge("google_search", "currency_conversion")
+        workflow.add_edge("currency_conversion", "response_generator")
         
         workflow.add_conditional_edges(
             "response_generator",
@@ -168,6 +178,45 @@ class ARTWorkflow:
             state['error_messages'].append(str(e))
             state['conversation_state'] = ConversationState.ERROR
 
+        return state
+    
+    async def memory_manager_node(self, state: AppState) -> AppState:
+        """메모리 관리 노드 - Short-term & Long-term 메모리 업데이트"""
+        logger.info("[Memory] 메모리 관리 시작")
+        state = self.state_manager.log_execution_path(state, "memory_manager")
+        
+        try:
+            memory_manager = get_memory_manager()
+            session_id = state['session_id']
+            
+            # Short-term 메모리에 현재 쿼리 추가
+            memory_manager.add_user_memory(
+                user_id=state.get('user_id'),
+                session_id=session_id,
+                role="user",
+                content=state['user_query']
+            )
+            
+            # 최근 대화 컨텍스트 조회
+            conversation_context = memory_manager.get_conversation_context(session_id, num_messages=3)
+            state = self.state_manager.update_state(state, {
+                'short_term_context': conversation_context
+            })
+            
+            # Long-term 메모리에서 사용자 선호도 조회
+            if state.get('user_id'):
+                user_context = memory_manager.get_user_context(state['user_id'])
+                state = self.state_manager.update_state(state, {
+                    'long_term_context': user_context
+                })
+                logger.debug("[Memory] Long-term 컨텍스트 로드: %s", state.get('user_id'))
+            
+            logger.info("[Memory] 메모리 업데이트 완료")
+            
+        except Exception as e:
+            logger.error("[Memory] 메모리 관리 실패: %s", str(e))
+            # 메모리 오류는 워크플로우를 중단하지 않음
+        
         return state
     
     async def hotel_rag_node(self, state: AppState) -> AppState:
@@ -282,6 +331,32 @@ class ARTWorkflow:
         
         return state
     
+    async def safety_info_node(self, state: AppState) -> AppState:
+        """안전 정보 조회 노드"""
+        logger.info("[SafetyInfo] 안전 정보 조회 시작")
+        state = self.state_manager.log_execution_path(state, "safety_info")
+        
+        destination = state.get('destination')
+        if not destination:
+            logger.warning("[SafetyInfo] 목적지 정보 없음 - 안전 정보 조회 스킵")
+            return state
+        
+        try:
+            safety_info = await self.safety_info.get_safety_info(destination)
+            
+            if safety_info:
+                logger.info(f"[SafetyInfo] 안전 정보 조회 성공: {safety_info.country}")
+                state = self.state_manager.update_state(state, {
+                    'safety_info': safety_info
+                })
+            else:
+                logger.warning(f"[SafetyInfo] 안전 정보 조회 실패: {destination}")
+                
+        except Exception as e:
+            logger.error(f"[SafetyInfo] 조회 중 오류: {str(e)}")
+        
+        return state
+    
     async def google_search_node(self, state: AppState) -> AppState:
         """구글 검색 및 실시간 가격 정보 병합"""
         logger.info(f"[GoogleSearch] 호텔 {len(state.get('hotel_options', [])[:3])}곳 정보 검색 시작")
@@ -355,6 +430,37 @@ class ARTWorkflow:
             pass 
         
         return state
+    
+    async def currency_conversion_node(self, state: AppState) -> AppState:
+        """환율 변환 및 가격 정규화"""
+        logger.info("[CurrencyConversion] 호텔 및 항공편 가격 정규화 시작")
+        
+        state = self.state_manager.log_execution_path(state, "currency_conversion")
+        
+        try:
+            # CurrencyConverterNode 실행
+            updated_state = await execute_currency_conversion(state)
+            
+            # 정규화된 정보 로깅
+            if 'normalized_hotels' in updated_state.get('context', {}):
+                num_hotels = len(updated_state['context']['normalized_hotels'])
+                logger.info("[CurrencyConversion] %s개 호텔 USD 기준 정규화 완료", num_hotels)
+            
+            if 'normalized_flights' in updated_state.get('context', {}):
+                num_flights = len(updated_state['context']['normalized_flights'])
+                logger.info("[CurrencyConversion] %s개 항공편 USD 기준 정규화 완료", num_flights)
+            
+            # 환율 정보 추가
+            if 'currency_conversions' in updated_state.get('context', {}):
+                conversion_info = updated_state['context']['currency_conversions']
+                logger.info("[CurrencyConversion] 기준 통화: %s", conversion_info.get('base_currency'))
+            
+            return updated_state
+            
+        except Exception:  # pylint: disable=broad-except
+            logger.error("[CurrencyConversion] 환율 변환 실패", exc_info=True)
+            # 에러 발생해도 워크플로우 계속 진행
+            return state
     
     async def response_generator_node(self, state: AppState) -> AppState:
         """응답 생성 (만족도 추적 포함)"""
