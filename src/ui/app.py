@@ -33,6 +33,9 @@ if 'chat_history' not in st.session_state:
 if 'current_plan' not in st.session_state:
     st.session_state.current_plan = None
 
+if 'input_query' not in st.session_state:
+    st.session_state.input_query = ''
+
 # CSS 스타일
 st.markdown("""
 <style>
@@ -153,7 +156,7 @@ with st.sidebar:
             if 'input_query' in st.session_state:
                 del st.session_state.input_query
             #[수정] streamlit return 오류 발생해서 수정
-            st.experimental_rerun()
+            st.rerun()
     else:
         st.info("새 대화를 시작하세요")
 
@@ -229,7 +232,7 @@ with col1:
                         })
                         
                         #[수정] streamlit return 오류 발생해서 수정
-                        st.experimental_rerun() # 화면 갱신
+                        st.rerun() # 화면 갱신
                     else:
                         st.error(f"오류: {result.get('error', '알 수 없는 오류')}")
                 else:
