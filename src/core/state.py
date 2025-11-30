@@ -139,6 +139,9 @@ class AppState(TypedDict):
     # 대화 히스토리 및 메모리
     chat_history: List[ChatMessage]          # 전체 대화 기록
     context_memory: Dict[str, Any]           # 컨텍스트 메모리 (임시 정보)
+    short_term_context: Optional[str]        # Short-term 메모리 컨텍스트
+    long_term_context: Optional[str]         # Long-term 메모리 컨텍스트
+    user_id: Optional[str]                   # 사용자 ID (Long-term 메모리용)
     
     # 실행 메타데이터
     current_agent: Optional[str]             # 현재 실행 중인 에이전트
@@ -186,6 +189,9 @@ class StateManager:
                 )
             ],
             context_memory={'conversation_memory': ConversationMemory()},
+            short_term_context=None,
+            long_term_context=None,
+            user_id=None,
             current_agent=None,
             execution_path=[],
             error_messages=[],
