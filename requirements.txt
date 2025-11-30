@@ -51,8 +51,11 @@ pytest-cov==4.1.0
 
 # Logging & Monitoring
 loguru==0.7.2
+prometheus-client>=0.14.0
 
 # Development Tools
 black==23.11.0
 flake8==6.1.0
 mypy==1.7.0
+wikipedia>=1.4.0
+

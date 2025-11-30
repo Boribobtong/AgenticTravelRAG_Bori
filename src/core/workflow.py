@@ -19,6 +19,7 @@ from src.agents.response_generator import ResponseGeneratorAgent
 from src.tools.ab_testing import ABTestingManager
 from src.tools.satisfaction_tracker import SatisfactionTracker
 from src.tools.metrics_collector import get_metrics_collector
+from src.tools.wiki_tool import WikipediaCustomTool
 import time
 
 # 로깅 설정
@@ -38,6 +39,11 @@ class ARTWorkflow:
         self.weather_tool = WeatherToolAgent()
         self.google_search = GoogleSearchAgent()
         self.response_generator = ResponseGeneratorAgent()
+        # Wikipedia tool (Phase 4)
+        try:
+            self.wiki_tool = WikipediaCustomTool()
+        except Exception:
+            self.wiki_tool = None
         
         # Phase 4: A/B Testing
         self.ab_testing = ABTestingManager()
@@ -349,6 +355,25 @@ class ARTWorkflow:
         state = self.state_manager.log_execution_path(state, "response_generator")
         
         try:
+            # Enrich state with wiki entries for destination (best-effort)
+            try:
+                wiki_entries = []
+                if getattr(self, 'wiki_tool', None) is not None:
+                    destination = state.get('destination')
+                    if destination:
+                        # Query destination and a history-focused query
+                        res1 = self.wiki_tool.run(destination)
+                        if res1 and not res1.get('error'):
+                            wiki_entries.append(res1)
+                        res2 = self.wiki_tool.run(f"{destination} 역사")
+                        if res2 and not res2.get('error'):
+                            wiki_entries.append(res2)
+                if wiki_entries:
+                    state = self.state_manager.update_state(state, {'wiki_entries': wiki_entries})
+            except Exception:
+                # non-fatal: continue without wiki entries
+                pass
+
             final_response = await self.response_generator.generate(state)
             
             state = self.state_manager.update_state(state, {
