@@ -11,6 +11,7 @@ import logging
 import asyncio
 
 from src.core.state import AppState, StateManager, ConversationState, ChatMessage
+from src.core.memory import get_memory_manager
 from src.agents.query_parser import QueryParserAgent
 from src.agents.hotel_rag import HotelRAGAgent  
 from src.agents.weather_tool import WeatherToolAgent
@@ -88,6 +89,7 @@ class ARTWorkflow:
         workflow = StateGraph(AppState)
         
         workflow.add_node("query_parser", self.parse_query_node)
+        workflow.add_node("memory_manager", self.memory_manager_node)
         workflow.add_node("hotel_rag", self.hotel_rag_node)
         workflow.add_node("weather_tool", self.weather_tool_node)
         workflow.add_node("safety_info", self.safety_info_node)
@@ -102,12 +104,13 @@ class ARTWorkflow:
             "query_parser",
             self.route_after_parsing,
             {
-                "search": "hotel_rag",     # 검색 실행
+                "search": "memory_manager",     # 메모리 저장 후 검색 실행
                 "feedback": "feedback_handler", # 단순 피드백 처리
                 "error": END
             }
         )
         
+        workflow.add_edge("memory_manager", "hotel_rag")
         workflow.add_edge("hotel_rag", "weather_tool")
         workflow.add_edge("weather_tool", "safety_info")
         workflow.add_edge("safety_info", "google_search")
@@ -175,6 +178,45 @@ class ARTWorkflow:
             state['error_messages'].append(str(e))
             state['conversation_state'] = ConversationState.ERROR
 
+        return state
+    
+    async def memory_manager_node(self, state: AppState) -> AppState:
+        """메모리 관리 노드 - Short-term & Long-term 메모리 업데이트"""
+        logger.info("[Memory] 메모리 관리 시작")
+        state = self.state_manager.log_execution_path(state, "memory_manager")
+        
+        try:
+            memory_manager = get_memory_manager()
+            session_id = state['session_id']
+            
+            # Short-term 메모리에 현재 쿼리 추가
+            memory_manager.add_user_memory(
+                user_id=state.get('user_id'),
+                session_id=session_id,
+                role="user",
+                content=state['user_query']
+            )
+            
+            # 최근 대화 컨텍스트 조회
+            conversation_context = memory_manager.get_conversation_context(session_id, num_messages=3)
+            state = self.state_manager.update_state(state, {
+                'short_term_context': conversation_context
+            })
+            
+            # Long-term 메모리에서 사용자 선호도 조회
+            if state.get('user_id'):
+                user_context = memory_manager.get_user_context(state['user_id'])
+                state = self.state_manager.update_state(state, {
+                    'long_term_context': user_context
+                })
+                logger.debug("[Memory] Long-term 컨텍스트 로드: %s", state.get('user_id'))
+            
+            logger.info("[Memory] 메모리 업데이트 완료")
+            
+        except Exception as e:
+            logger.error("[Memory] 메모리 관리 실패: %s", str(e))
+            # 메모리 오류는 워크플로우를 중단하지 않음
+        
         return state
     
     async def hotel_rag_node(self, state: AppState) -> AppState:
