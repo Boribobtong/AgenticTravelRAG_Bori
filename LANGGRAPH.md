@@ -9,14 +9,13 @@ graph TD
     Start([User Input]) --> QueryParser
     
     subgraph "Core Agent Flow"
-        QueryParser[Query Parser Agent<br/>(Gemini Flash)]
-        HotelRAG[Hotel RAG Agent<br/>(ElasticSearch + A/B Test)]
-        Weather[Weather Tool Agent<br/>(Open-Meteo)]
-        GoogleSearch[Google Search Agent<br/>(SerpApi)]
-        ResponseGen[Response Generator<br/>(Gemini Pro)]
+        QueryParser["`Query Parser Agent<br/>(Gemini Flash)`"]
+        HotelRAG["`Hotel RAG Agent<br/>(ElasticSearch + A/B Test)`"]
+        Weather["`Weather Tool Agent<br/>(Open-Meteo)`"]
+        GoogleSearch["`Google Search Agent<br/>(SerpApi)`"]
+        ResponseGen["`Response Generator<br/>(Gemini Pro)`"]
         Feedback[Feedback Handler]
     end
-
     %% 흐름 연결
     QueryParser -- "목적지 있음" --> HotelRAG
     QueryParser -- "단순 대화/목적지 없음" --> Feedback
@@ -31,7 +30,6 @@ graph TD
     Feedback -- "재검색 요청" --> HotelRAG
     Feedback -- "쿼리 재수정" --> QueryParser
     Feedback -- "종료" --> End
-
     %% 스타일링
     style QueryParser fill:#e1f5fe,stroke:#01579b
     style HotelRAG fill:#fff9c4,stroke:#fbc02d
@@ -57,20 +55,17 @@ graph TD
 ```mermaid
 graph TB
     subgraph "Frontend Layer"
-        CLI[CLI Client<br/>(scripts/run_agent.py)]
-        Streamlit[Streamlit UI<br/>(src/ui/app.py)]
-        Dashboard[Monitoring Dashboard<br/>(src/tools/monitoring_dashboard.py)]
+        CLI["`CLI Client<br/>(scripts/run_agent.py)`"]
+        Streamlit["`Streamlit UI<br/>(src/ui/app.py)`"]
+        Dashboard["`Monitoring Dashboard<br/>(src/tools/monitoring_dashboard.py)`"]
     end
-
     subgraph "Backend API Layer"
-        FastAPI[FastAPI Server<br/>(src/api/main.py)]
+        FastAPI["`FastAPI Server<br/>(src/api/main.py)`"]
     end
-
     subgraph "Orchestration Layer (src/core)"
         LangGraph[LangGraph Workflow]
         StateManager[State Manager]
     end
-
     subgraph "Tools & Intelligence Layer"
         Gemini[Google Gemini API]
         Meteo[Open-Meteo API]
@@ -83,13 +78,11 @@ graph TB
             Retrain[Retraining Pipeline]
         end
     end
-
     subgraph "Data Layer"
-        Elastic[(ElasticSearch<br/>Vector DB)]
-        SQLite[(SQLite DBs<br/>Stats/Logs)]
+        Elastic["`ElasticSearch<br/>Vector DB`"]
+        SQLite["`SQLite DBs<br/>Stats/Logs`"]
         RawData[TripAdvisor Data]
     end
-
     %% 연결 관계
     CLI --> LangGraph
     Streamlit --> FastAPI
