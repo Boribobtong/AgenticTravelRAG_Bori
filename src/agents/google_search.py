@@ -67,6 +67,9 @@ class GoogleSearchAgent:
             return self._get_mock_price_data(hotel_name)
         
         try:
+            # [디버깅 로그 추가 1] 어떤 이름으로 검색하는지 확인
+            logger.info(f"[GoogleSearch] 가격 검색 요청: {hotel_name} ({check_in}~{check_out})")
+
             params = {
                 'q': hotel_name,
                 'api_key': self.api_key,
@@ -81,7 +84,18 @@ class GoogleSearchAgent:
                 async with session.get(self.base_url, params=params) as response:
                     if response.status == 200:
                         data = await response.json()
-                        return self._parse_hotel_prices(data)
+                        result = self._parse_hotel_prices(data)
+                        
+                        # [수정] 결과 개수에 따른 명확한 로그 출력
+                        price_count = len(result.get('prices', []))
+                        if price_count > 0:
+                            logger.info(f"[GoogleSearch] 가격 정보 {price_count}개 수신 성공: {hotel_name}")
+                        else:
+                            logger.warning(f"[GoogleSearch] API 호출은 성공했으나 가격 정보 없음: {hotel_name}")
+                            # 디버깅을 위해 원본 데이터 키 확인
+                            logger.debug(f"응답 키: {list(data.keys())}")
+
+                        return result
                     else:
                         logger.error(f"가격 API 호출 실패 status={response.status}")
                         return self._get_mock_price_data(hotel_name)
@@ -163,15 +177,17 @@ class GoogleSearchAgent:
         """호텔 가격 정보 파싱 (리스트/단일 결과 모두 지원)"""
         prices = []
         
-        # Case 1: 여러 호텔 검색 결과 (기존 로직 - properties 리스트)
+        # Case 1: 여러 호텔 검색 결과
         if 'properties' in data:
             for property in data.get('properties', [])[:5]:
-                prices.append({
-                    'provider': property.get('name', 'Google Hotels'),
-                    'price': property.get('rate_per_night', {}).get('lowest', 'N/A'),
-                    'total_price': property.get('total_rate', {}).get('lowest', 'N/A'),
-                    'link': property.get('link', '')
-                })
+                # [추가] 가격 정보가 있는 경우만 추가
+                if property.get('rate_per_night', {}).get('lowest'):
+                    prices.append({
+                        'provider': property.get('name', 'Google Hotels'),
+                        'price': property.get('rate_per_night', {}).get('lowest', 'N/A'),
+                        'total_price': property.get('total_rate', {}).get('lowest', 'N/A'),
+                        'link': property.get('link', '')
+                    })
 
         # Case 2: 단일 호텔 상세 결과 (prices 리스트)
         elif 'prices' in data:
