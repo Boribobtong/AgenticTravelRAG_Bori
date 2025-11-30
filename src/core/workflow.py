@@ -16,6 +16,7 @@ from src.agents.hotel_rag import HotelRAGAgent
 from src.agents.weather_tool import WeatherToolAgent
 from src.agents.google_search import GoogleSearchAgent
 from src.agents.response_generator import ResponseGeneratorAgent
+from src.agents.safety_info import SafetyInfoAgent
 from src.agents.currency_converter_node import execute_currency_conversion
 from src.tools.ab_testing import ABTestingManager
 from src.tools.satisfaction_tracker import SatisfactionTracker
@@ -40,6 +41,7 @@ class ARTWorkflow:
         self.weather_tool = WeatherToolAgent()
         self.google_search = GoogleSearchAgent()
         self.response_generator = ResponseGeneratorAgent()
+        self.safety_info = SafetyInfoAgent()
         # Wikipedia tool (Phase 4)
         try:
             self.wiki_tool = WikipediaCustomTool()
@@ -88,6 +90,7 @@ class ARTWorkflow:
         workflow.add_node("query_parser", self.parse_query_node)
         workflow.add_node("hotel_rag", self.hotel_rag_node)
         workflow.add_node("weather_tool", self.weather_tool_node)
+        workflow.add_node("safety_info", self.safety_info_node)
         workflow.add_node("google_search", self.google_search_node)
         workflow.add_node("currency_conversion", self.currency_conversion_node)
         workflow.add_node("response_generator", self.response_generator_node)
@@ -106,7 +109,8 @@ class ARTWorkflow:
         )
         
         workflow.add_edge("hotel_rag", "weather_tool")
-        workflow.add_edge("weather_tool", "google_search")
+        workflow.add_edge("weather_tool", "safety_info")
+        workflow.add_edge("safety_info", "google_search")
         workflow.add_edge("google_search", "currency_conversion")
         workflow.add_edge("currency_conversion", "response_generator")
         
@@ -282,6 +286,32 @@ class ARTWorkflow:
             
         except Exception as e:
             logger.error(f"[Weather] 실패: {str(e)}")
+        
+        return state
+    
+    async def safety_info_node(self, state: AppState) -> AppState:
+        """안전 정보 조회 노드"""
+        logger.info("[SafetyInfo] 안전 정보 조회 시작")
+        state = self.state_manager.log_execution_path(state, "safety_info")
+        
+        destination = state.get('destination')
+        if not destination:
+            logger.warning("[SafetyInfo] 목적지 정보 없음 - 안전 정보 조회 스킵")
+            return state
+        
+        try:
+            safety_info = await self.safety_info.get_safety_info(destination)
+            
+            if safety_info:
+                logger.info(f"[SafetyInfo] 안전 정보 조회 성공: {safety_info.country}")
+                state = self.state_manager.update_state(state, {
+                    'safety_info': safety_info
+                })
+            else:
+                logger.warning(f"[SafetyInfo] 안전 정보 조회 실패: {destination}")
+                
+        except Exception as e:
+            logger.error(f"[SafetyInfo] 조회 중 오류: {str(e)}")
         
         return state
     

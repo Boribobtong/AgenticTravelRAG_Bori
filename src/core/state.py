@@ -5,10 +5,13 @@ AppState: A.R.T 시스템의 중앙 상태 관리 모듈
 상태 정보를 저장하는 핵심 데이터 구조입니다.
 """
 
-from typing import TypedDict, List, Dict, Optional, Any
+from typing import TypedDict, List, Dict, Optional, Any, TYPE_CHECKING
 from datetime import datetime
 from enum import Enum
 from pydantic import BaseModel, Field
+
+if TYPE_CHECKING:
+    from src.agents.safety_info import SafetyInfo
 
 
 class ConversationState(str, Enum):
@@ -131,6 +134,7 @@ class AppState(TypedDict):
     hotel_options: List[HotelOption]         # RAG 호텔 검색 결과
     weather_forecast: List[WeatherForecast]  # 날씨 예보
     google_search_results: List[GoogleSearchResult]  # 구글 검색 결과
+    safety_info: Optional[Any]               # 안전 정보 (SafetyInfo)
     
     # 대화 히스토리 및 메모리
     chat_history: List[ChatMessage]          # 전체 대화 기록
@@ -174,6 +178,7 @@ class StateManager:
             hotel_options=[],
             weather_forecast=[],
             google_search_results=[],
+            safety_info=None,
             chat_history=[
                 ChatMessage(
                     role="user",

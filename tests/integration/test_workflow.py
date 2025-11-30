@@ -115,6 +115,7 @@ async def test_full_workflow_execution(mock_agents, monkeypatch):
         'query_parser', 
         'hotel_rag',     # 'both' 라우팅으로 인해 호텔/날씨 둘 다 실행
         'weather_tool', 
+        'safety_info',   # 안전 정보 조회
         'google_search',
         'response_generator'
     ]
