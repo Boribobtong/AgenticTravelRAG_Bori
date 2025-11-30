@@ -43,6 +43,11 @@ data/quality_monitor.db
 logs/
 *.log
 
+# Test/Debug log files
+log.md
+log_*.md
+test_log.md
+
 # Private keys and certificates (do NOT commit)
 *.pem
 *.key
