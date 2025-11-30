@@ -25,6 +25,7 @@ venv/
 .venv/
 env/
 *.egg-info/
+docs
 
 # ============================================
 # 📂 Data and Logs
