@@ -64,11 +64,13 @@ class ResponseGeneratorAgent:
             "- 날씨 예보: {weather_forecast}\n"
             "- 검색 정보: {google_info}\n"
             "- 위키백과 정보: {wiki_snippets}\n"
-            "- 안전 정보: {safety_info}\n\n"
+            "- 안전 정보: {safety_info}\n"
+            "- 환율 정보: {currency_info}\n\n"
             
             "**[중요]** 날씨 예보가 테이블 형식이면 그대로 복사하여 사용하세요. 절대 텍스트로 변환하지 마세요.\n"
             "**[위키백과]** 제공된 위키백과 정보를 참고하여 여행지의 역사, 문화적 배경, 명소의 유래 등을 일정 설명에 자연스럽게 녹여내세요.\n"
-            "**[안전 정보]** 제공된 안전 정보(긴급 연락처, 언어, 통화 등)를 여행 계획서에 포함하세요. 이모지를 활용하여 가독성 있게 작성하세요.\n\n"
+            "**[안전 정보]** 제공된 안전 정보(긴급 연락처, 언어, 통화 등)를 여행 계획서에 포함하세요. 이모지를 활용하여 가독성 있게 작성하세요.\n"
+            "**[환율 정보]** 환율 정보(기본 통화: USD)를 참고하여 숙박료, 음식값 등을 다양한 통화로 표시하세요.\n\n"
             "**호텔 가격 정보는 반드시 포함해야 합니다.** 실시간 가격이 있으면 그 값을, 없으면 예산 범위($ 표시)를 표기하세요.\n"
             "위 데이터를 바탕으로 여행자가 바로 떠나고 싶어지도록 상세한 계획을 작성해주세요."
         )
@@ -94,7 +96,8 @@ class ResponseGeneratorAgent:
                 weather_forecast=weather_info,
                 google_info=str(state.get('google_search_results', [])),
                 wiki_snippets=self._format_wiki_entries(state.get('wiki_entries', [])),
-                safety_info=self._format_safety_info(state.get('safety_info'))
+                safety_info=self._format_safety_info(state.get('safety_info')),
+                currency_info=self._format_currency_info(state.get('context', {}).get('currency_conversions', {}))
             )
 
             if self.llm:
@@ -186,6 +189,27 @@ class ResponseGeneratorAgent:
         from src.agents.safety_info import SafetyInfoAgent
         agent = SafetyInfoAgent()
         return agent.format_safety_info(safety_info)
+    
+    def _format_currency_info(self, currency_data: Dict) -> str:
+        """환율 정보를 포맷팅"""
+        if not currency_data:
+            return "환율 정보 없음"
+        
+        base_currency = currency_data.get('base_currency', 'USD')
+        exchange_rates = currency_data.get('exchange_rates', {})
+        
+        if not exchange_rates:
+            return f"기본 통화: {base_currency}"
+        
+        # Display top 5 major currencies
+        major_currencies = ['EUR', 'GBP', 'JPY', 'KRW', 'CNY']
+        rates_text = f"**기본 통화: {base_currency}**\n환율:\n"
+        
+        for curr in major_currencies[:5]:
+            if curr in exchange_rates:
+                rates_text += f"- {curr}: {exchange_rates[curr]:.2f}\n"
+        
+        return rates_text
 
     async def stream_response(self, state: Dict[str, Any]):
         """Async generator that yields parts of the response incrementally.
